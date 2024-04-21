@@ -1,6 +1,11 @@
+ **QueueItUp 2.5.2**
+ 
 ![Screenshot 2024-04-09 174800](https://github.com/chuckkay/QueueItUp/assets/10617746/65cd8c2f-1192-4bde-a3e6-39540cee42bc)
 
- **QueueItUp 2.5.2**
+
+
+![Screenshot 2024-04-15 063227](https://github.com/chuckkay/QueueItUp/assets/10617746/971e2bd3-df87-412e-998a-9e93b7d19f63)
+
 This is it—at least until Henry releases the official queueing feature for Facefusion. I'm not a coder, but I think I did a pretty good job creating this simple one-file drop-in addon to fill the void until the official features are added.
 **How to Install:**
 1. Download QueueItUp.py.
@@ -18,4 +23,5 @@ QueueItUp is a self-contained add-on that keeps all its components in a folder c
 3. Gradio oh Gradio... So, have you noticed Gradio doesn’t actually use your source or target files? It copies them to a `user\temp\gradio` directory with an undecipherable hash, maybe for security, I don’t know... But!!! How can you use a queuing program when you don't have the original source paths or target paths, only some temp folder? And what happens if you don’t have time to finish all the items in your queue? Oh wait, I just realized this belongs in the features section. That's right, you can crash, abort, unplug, do whatever—QueueItUp 2.5.2 has your back and can resume from the last job! Awesome... But this wouldn’t be possible if QueueItUp relied on Gradio’s temp directory which periodically gets wiped clean by other programs like Automatic 1111 and even Facefusion... So goodbye source and targets, and although you can fix that in Edit Queue by finding the files again if you remember where they are. But you don’t have to, BECAUSE QueueItUp 2.5.2 one-ups Gradio and makes its own media cache directory the second Gradio absconds with your media. QueueItUp 2. 5.2 steals it right back and stores it for safekeeping and tracking where every job has a record of which files to use, and even when jobs are completed which cache files to delete, so long as there are no other pending jobs that might need that specific file. Nice, right? I thought so—a nice and tidy media cache directory that only cleans out the cache when there are no jobs that need it.
 
 Speaking of cache, yes, please feel free to donate... and enjoy QueueItUp 2.5.2! 😊
+
 
