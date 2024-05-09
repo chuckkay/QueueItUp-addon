@@ -1,6 +1,6 @@
- **QueueItUp 2.5.2**
+ **QueueItUp 2.5.3**
  
-![Screenshot 2024-04-09 174800](https://github.com/chuckkay/QueueItUp/assets/10617746/65cd8c2f-1192-4bde-a3e6-39540cee42bc)
+<img width="1679" alt="Screenshot 2024-05-09 110834" src="https://github.com/chuckkay/QueueItUp/assets/10617746/ebf49e9b-04f6-4373-9c33-636dd43e23da">
 
 
 
