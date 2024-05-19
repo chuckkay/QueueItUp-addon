@@ -1,4 +1,4 @@
- **QueueItUp 2.5.3.9** Now with added BatchItUp feature
+ **QueueItUp 2.6** Now with added BatchItUp feature
  
 <img width="1679" alt="Screenshot 2024-05-09 110834" src="https://github.com/chuckkay/QueueItUp/assets/10617746/ebf49e9b-04f6-4373-9c33-636dd43e23da">
 
