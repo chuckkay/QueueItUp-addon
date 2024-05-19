@@ -31,6 +31,6 @@ DONE ~~3. Something about Henry's code has me baffeled, so unfortunaitly when it
 
 
 
-Speaking of cache, yes, please feel free to donate... and enjoy QueueItUp 2.5.3! 😊
+Speaking of cache, yes, please feel free to donate... and enjoy QueueItUp 2.6! 😊
 
 
