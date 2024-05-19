@@ -3,39 +3,38 @@ import gradio
 import os
 import re
 import sys
-import ast
+###import ast
 import uuid
 import time
 import math
 import json
-import tempfile
+###import tempfile
 import shutil
-import socket
-import shlex
-import logging
+###import socket
+###import shlex
+###import logging
 import tkinter as tk
-import platform
+###import platform
 import threading
 import subprocess
-import configparser
-from tkinter.filedialog import askdirectory
-from tkinter import filedialog, Text, font, Toplevel, messagebox, PhotoImage, Tk, Canvas, Scrollbar, Frame, Label, Button
+###import configparser
+###from tkinter.filedialog import askdirectory
+from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button###, Frame, Label, Text, Tk, Canvas
 from io import BytesIO
 import facefusion.globals
-from facefusion import core
-import facefusion.core as core
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
 
 
 def pre_check() -> bool:
     return True
 
+
 def pre_render() -> bool:
     return True
 
 
 def render() -> gradio.Blocks:
-    global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, status_window
+    global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW
     with gradio.Blocks() as layout:
         with gradio.Row():
             with gradio.Column(scale = 2):
@@ -62,8 +61,8 @@ def render() -> gradio.Blocks:
                     target.render()
                 with gradio.Blocks():
                     output.render()
-                # with gradio.Blocks():
-                    # status_window.render()
+                with gradio.Blocks():
+                    STATUS_WINDOW.render()
                 with gradio.Blocks():
                     ADD_JOB_BUTTON.render()
                 with gradio.Blocks():
@@ -85,14 +84,13 @@ def render() -> gradio.Blocks:
                     common_options.render()
     return layout
 
-    
 
 def listen() -> None:
-    global EDIT_JOB_BUTTON, status_window
-    ADD_JOB_BUTTON.click(assemble_queue)
-    RUN_JOBS_BUTTON.click(execute_jobs)
-    EDIT_JOB_BUTTON.click(edit_queue)
-    # status_window.change(custom_print, inputs=[], outputs=[status_window])
+    global EDIT_JOB_BUTTON, STATUS_WINDOW
+    ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
+    RUN_JOBS_BUTTON.click(execute_jobs, outputs=STATUS_WINDOW)
+    EDIT_JOB_BUTTON.click(edit_queue, outputs=STATUS_WINDOW)
+    STATUS_WINDOW.change(custom_print, inputs=[], outputs=[STATUS_WINDOW])
     frame_processors.listen()
     frame_processors_options.listen()
     execution.listen()
@@ -110,6 +108,7 @@ def listen() -> None:
     face_masker.listen()
     face_analyser.listen()
     common_options.listen()
+
 
 def get_default_values_from_ini():
     #only needed for Sd-webui version Reads and parses default values from the ini file.
@@ -134,13 +133,14 @@ def get_default_values_from_ini():
                         except ValueError:
                             parsed_val = val
             default_values[key] = parsed_val
-    with open(os.path.join(working_dir, f"default_values.txt"), "w") as file:
+    with open(os.path.join(working_dir, "default_values.txt"), "w") as file:
         for key, val in default_values.items():
             file.write(f"{key}: {val}\n")
     return default_values
 
+
 def assemble_queue():
-    global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, default_values, current_values
+    global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
     # default_values are already initialized, do not call for new default except if sd-webui version
     if automatic1111:
         default_values = get_default_values_from_ini()
@@ -148,7 +148,8 @@ def assemble_queue():
     current_values = get_values_from_globals('current_values')
 
     differences = {}
-    keys_to_skip = ["source_paths", "target_path", "output_path", "ui_layouts", "face_recognizer_model"]
+    ###keys_to_skip = ["source_paths", "target_path", "output_path", "ui_layouts", "face_recognizer_model"]
+    keys_to_skip = ["source_paths", "target_path", "output_path", "ui_layouts"]
     if "frame-processors" in current_values:
         frame_processors = current_values["frame-processors"]
         if "face-enhancer" not in frame_processors:
@@ -224,7 +225,7 @@ def assemble_queue():
         "output_path": (output_path),
     }
     if debugging:
-        with open(os.path.join(working_dir, f"job_args.txt"), "w") as file:
+        with open(os.path.join(working_dir, "job_args.txt"), "w") as file:
             for key, val in current_values.items():
                 file.write(f"{key}: {val}\n")
 
@@ -251,7 +252,11 @@ def assemble_queue():
     if JOB_IS_RUNNING:
         custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}\n\n")
     else:
-        custom_print(f"{BLUE}Your Job was Added to the queue,{ENDC} there are a total of {GREEN}#{PENDING_JOBS_COUNT} Job(s){ENDC} in the queue,  Add More Jobs, Edit the Queue,\n\n or Click Run Queue to Execute all the queued jobs\n\n")
+        custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue, {YELLOW}  Add More Jobs, Edit the Queue, or Click Run Queue to Execute all the queued jobs\n\n{ENDC}")
+        
+    return STATUS_WINDOW.value
+
+    
 def run_job_args(current_run_job):
     global CURRENT_JOB_NUMBER
 
@@ -269,6 +274,7 @@ def run_job_args(current_run_job):
     setattr(facefusion.globals, ui_layouts, ['QueueItUp'])
 
     if automatic1111:
+        print (f"{venv_python} {base_dir}\\run2.py {simulated_cmd}")
         process = subprocess.Popen(
             f"{venv_python} {base_dir}\\run2.py {simulated_cmd}",
             shell=True,
@@ -310,8 +316,6 @@ def run_job_args(current_run_job):
                         print(f"{label}: {RED}{line.strip()}{ENDC}")
                     else:
                         print(f"{label}: {YELLOW}{line.strip()}{ENDC}")
-
-
     stdout_thread = threading.Thread(target=handle_output, args=(process.stdout, stdout_lines, True))
     stderr_thread = threading.Thread(target=handle_output, args=(process.stderr, stderr_lines, False))
 
@@ -336,6 +340,8 @@ def run_job_args(current_run_job):
         current_run_job['status'] = 'failed'
 
     return return_code
+    
+    
 def execute_jobs():
     global JOB_IS_RUNNING, JOB_IS_EXECUTING,CURRENT_JOB_NUMBER,jobs_queue_file, jobs
     count_existing_jobs()
@@ -376,12 +382,9 @@ def execute_jobs():
             source_basenames = os.path.basename(current_run_job['sourcecache'])
 
         custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with source {GREEN}{source_basenames}{ENDC} to -> target {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC}\n\n")
-
 ########
         run_job_args(current_run_job)
 ########
-
-
         if current_run_job['status'] == 'completed':
             custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {GREEN} completed successfully {BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}\n")
         else:
@@ -418,6 +421,7 @@ def execute_jobs():
     JOB_IS_RUNNING = 0
     save_jobs(jobs_queue_file, jobs)
     check_for_unneeded_media_cache()
+
 
 def edit_queue():
     global root, frame, output_text, edit_queue_window, default_values, jobs_queue_file, jobs, job, image_references, thumbnail_dir, working_dir, PENDING_JOBS_COUNT, pending_jobs_var
@@ -488,7 +492,6 @@ def edit_queue():
         save_jobs(jobs_queue_file, jobs)
         root.destroy
 
-
     def delete_pending_jobs():
         jobs = load_jobs(jobs_queue_file)
         jobs = [job for job in jobs if job['status'] != 'pending']
@@ -507,7 +510,6 @@ def edit_queue():
         save_jobs(jobs_queue_file, jobs)
         refresh_frame_listbox()
 
-        
     def delete_missing_media_jobs(): 
         jobs = load_jobs(jobs_queue_file)
         jobs = [job for job in jobs if job['status'] != 'missing']
@@ -549,7 +551,7 @@ def edit_queue():
         response = messagebox.askyesno("Confirm Edit", "THIS WILL REMOVE THIS PENDING JOB FROM THE QUEUE, AND LOAD IT INTO FACEFUSION WEBUI FOR EDITING, WHEN DONE EDITING CLICK START TO RUN IT OR ADD JOB TO REQUEUE IT. ARE YOU SURE YOU WANT TO EDIT THIS JOB", icon='warning')
         if not response:
             return
-        job['headless'] = '--ui-layouts QueueItUp'
+        job['headless'] = ''
         job['status'] = 'editing'
         save_jobs(jobs_queue_file, jobs)
         top = Toplevel()
@@ -559,13 +561,11 @@ def edit_queue():
         top.after(1000, close_window)
         top.after(2000, top.destroy)
         custom_print(f"{GREEN} PLEASE WAIT WHILE THE Jobs IS RELOADED IN FACEFUSION{ENDC}...... {YELLOW}THIS WILL CREATE AN ADDITIONAL PYTHON PROCESS AND YOU SHOULD CONSIDER RESTARTING FACEFUSION AFTER DOING THIS MOR THEN 3 TIMES{ENDC}")
-
         root.destroy()
         run_job_args(job)
 
     def output_path_job(job):
         selected_path = filedialog.askdirectory(title="Select A New Output Path for this Job")
-        ###old error selected_path = askdirectory(title="Select A New Output Path for this Job")
 
         if selected_path:
             formatted_path = selected_path.replace('/', '\\')  
@@ -612,22 +612,17 @@ def edit_queue():
         global default_values
         job_args = job.get('job_args', '')
         preprocessed_defaults = preprocess_execution_providers(default_values)
-
         edit_arg_window = tk.Toplevel()
         edit_arg_window.title("Edit Job Arguments")
         edit_arg_window.geometry("1050x500")
-
         canvas = tk.Canvas(edit_arg_window)
         scrollable_frame = tk.Frame(canvas)
-
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.pack(side="left", fill="both", expand=True)
-
         entries = {}
         checkboxes = {}
         row = 0
         col = 0
-
         args_pattern = r'(--[\w-]+)\s+((?:.(?! --))+.)'
         iter_args = re.finditer(args_pattern, job_args)
         job_args_dict = {}
@@ -636,7 +631,6 @@ def edit_queue():
             value = ' '.join(value.split())  # Normalize spaces
             job_args_dict[arg] = value
         skip_keys = ['--source-paths', '--target-path', '--output-path', '--ui-layouts']
-
         for arg, default_value in default_values.items():
             cli_arg = '--' + arg.replace('_', '-')
             if cli_arg in skip_keys:
@@ -659,7 +653,6 @@ def edit_queue():
             checkboxes[cli_arg] = var
 
             var.trace_add("write", lambda *args, var=var, entry=entry, value=current_value: update_entry(var, entry, value))
-
             row += 1
             if row >= 16:
                 row = 0
@@ -698,11 +691,8 @@ def edit_queue():
         edit_arg_window.mainloop()
 
     def batch_job(job):
-        file_types = []
         target_filetype = None
         source_or_target = None
-
-
         if isinstance(job['sourcecache'], str):
             job['sourcecache'] = [job['sourcecache']]
         current_extension = job['targetcache'].lower().rsplit('.', 1)[-1]
@@ -836,8 +826,7 @@ def edit_queue():
 
         for file_path in file_paths:
             if not os.path.exists(file_path):
-                button = Button(parent, text=f"File not found:\n\n {os.path.basename(file_path)}\nClick to update", bg='white', fg='black',
-                                command=lambda: select_job_file(parent, job, source_or_target))
+                button = Button(parent, text=f"File not found:\n\n {os.path.basename(file_path)}\nClick to update", bg='white', fg='black', command=lambda: select_job_file(parent, job, source_or_target))
                 button.pack(pady=2, fill='x', expand=False)
                 return button
 
@@ -886,7 +875,6 @@ def edit_queue():
         if grid_result.returncode != 0:
             print(f"Error creating grid: {grid_result.stderr.decode()}")
             return None
-
         try:
             with open(grid_path, 'rb') as f:
                 grid_image_data = BytesIO(f.read())
@@ -897,7 +885,6 @@ def edit_queue():
             image_references[job_id] = button
         except Exception as e:
             print(f"Failed to open grid image: {e}")
-
         # Clean up thumbnail directory
         for file in thumbnail_files:
             if os.path.exists(file):
@@ -906,9 +893,7 @@ def edit_queue():
             os.remove(list_file_path)
         if os.path.exists(grid_path):
             os.remove(grid_path)
-
         return button
-
 
     def update_paths(job, path, source_or_target):
         job_id = id(job)
@@ -921,13 +906,11 @@ def edit_queue():
             cache_key = 'sourcecache'
             job[cache_key] = cache_path
 
-
         if source_or_target == 'target':
             cache_path = copy_to_media_cache(path)
             cache_key = 'targetcache'
             job[cache_key] = cache_path
             copy_to_media_cache(path)
-
             
         if source_or_target == 'output':
             cache_key = 'output_path'
@@ -945,7 +928,6 @@ def edit_queue():
                 count_existing_jobs()
                 for widget in frame.winfo_children():
                     widget.destroy()
-
                 for index, job in enumerate(jobs):
                     source_cache_path = job['sourcecache'] if isinstance(job['sourcecache'], list) else [job['sourcecache']]
                     source_thumb_exists = all(os.path.exists(os.path.normpath(source)) for source in source_cache_path)
@@ -1012,21 +994,16 @@ def edit_queue():
                         target_button.pack(side='left', padx=5)
                     else:
                         print("Failed to create target button.")
-                
                     argument_frame = tk.Frame(job_frame)
                     argument_frame.pack(side='left', fill='x', padx=5)
-
-                    facefusion_button = tk.Button(argument_frame, text=f"UN-Queue It Up", font=bold_font, justify='center')
+                    facefusion_button = tk.Button(argument_frame, text="UN-Queue It Up", font=bold_font, justify='center')
                     facefusion_button.pack(side='top', padx=5, fill='x', expand=False)
                     facefusion_button.bind("<Button-1>", lambda event, j=job: reload_job_in_facefusion_edit(j))
-
-                    argument_button = tk.Button(argument_frame, text=f"EDIT JOB ARGUMENTS", wraplength=325, justify='center')
+                    argument_button = tk.Button(argument_frame, text="EDIT JOB ARGUMENTS", wraplength=325, justify='center')
                     argument_button.pack(side='bottom', padx=5, fill='x', expand=False)
                     argument_button.bind("<Button-1>", lambda event, j=job: edit_job_arguments_text(j))
-                
                 frame.update_idletasks()
                 canvas.config(scrollregion=canvas.bbox("all"))
-
         except tk.TclError as e:
             pass
             
@@ -1045,17 +1022,20 @@ def count_existing_jobs():
     global PENDING_JOBS_COUNT
     jobs = load_jobs(jobs_queue_file)
     PENDING_JOBS_COUNT = len([job for job in jobs if job['status'] in ['pending']])
-    return PENDING_JOBS_COUNT
+    print_existing_jobs()
+    return PENDING_JOBS_COUNT, 
+
 
 def update_counters():
     global root, pending_jobs_var
     if pending_jobs_var:
         root.after(0, lambda: pending_jobs_var.set(f"Delete {PENDING_JOBS_COUNT} Pending Jobs"))
 
+
 def get_values_from_globals(state_name):
     state_dict = {}
     
-    from facefusion.processors.frame import globals as frame_processors_globals, choices as frame_processors_choices
+    from facefusion.processors.frame import globals as frame_processors_globals###, choices as frame_processors_choices
 
     modules = [facefusion.globals, frame_processors_globals]  
 
@@ -1077,15 +1057,19 @@ def get_values_from_globals(state_name):
         debug_print(f"{state_name}.txt created")
     return state_dict
 
+
 def debug_print (*msgs):
     if debugging:
         custom_print(*msgs)
+    STATUS_WINDOW.value = " ".join(str(msg) for msg in msgs if msg not in ["{RED}", "{GREEN}", "{YELLOW}", "{BLUE}", "{ENDC}"])
 
+    return STATUS_WINDOW.value
 
 
 def custom_print(*msgs):
     # Join all arguments into a single message string
     message = " ".join(str(msg) for msg in msgs)
+    STATUS_WINDOW.value = " ".join(str(msg) for msg in msgs if msg not in ["{RED}", "{GREEN}", "{YELLOW}", "{BLUE}", "{ENDC}"])
 
     # ANSI Color Codes
     RED = '\033[91m'
@@ -1093,20 +1077,8 @@ def custom_print(*msgs):
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
     ENDC = '\033[0m'
-
-    # Mapping of ANSI codes to tkinter text widget tags
-    ansi_to_tag = {
-        RED: 'red',
-        GREEN: 'green',
-        YELLOW: 'yellow',
-        BLUE: 'blue',
-        ENDC: 'end'
-    }
-
     print(message)  # Print to terminal with ANSI coloring
-
-
-
+    return STATUS_WINDOW.value
 
 def create_and_verify_json(file_path):
     if os.path.exists(file_path):
@@ -1125,10 +1097,6 @@ def create_and_verify_json(file_path):
             json.dump([], json_file)
         debug_print(f"JSON file '{file_path}' did not exist and has been created.")
 
-def load_jobs(file_path):
-    with open(file_path, 'r') as file:
-        jobs = json.load(file)
-    return jobs
 
 def load_jobs(file_path):
     with open(file_path, 'r') as file:
@@ -1151,18 +1119,20 @@ def format_cli_value(value):
         return 'None'
     return str(value)
 
+
 def print_existing_jobs():
 
-    count_existing_jobs()
     if JOB_IS_RUNNING:
         message = f"There is {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) being Processed - Click Add Job to Queue more Jobs"
     else:
         if PENDING_JOBS_COUNT > 0:
             message = f"There is {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Queue to Execute Them, or continue adding more jobs to the queue"
         else:
-            message = f"There is 0 job(s) in the queue - Click Add Job instead of Start"
+            message = "There is 0 job(s) in the queue - Click Add Job instead of Start"
     custom_print(message + "\n\n")
-    
+    STATUS_WINDOW.value = message
+    return STATUS_WINDOW.value
+
 
 def check_for_completed_failed_or_aborted_jobs():
     count_existing_jobs()
@@ -1183,10 +1153,13 @@ def check_for_completed_failed_or_aborted_jobs():
         save_jobs(jobs_queue_file, jobs)
         custom_print(f"{BLUE}All completed jobs have been removed, if you would like to keep completed jobs change the setting to True{ENDC}\n\n")
 
+
 def sanitize_filename(filename):
-    valid_chars = "-_.()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    valid_chars = "-_.()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
     sanitized = ''.join(c if c in valid_chars else '_' for c in filename)
+    sanitized = sanitized.strip()  # Remove leading and trailing spaces
     return sanitized
+
 
 def copy_to_media_cache(file_paths):
     if isinstance(file_paths, str):
@@ -1217,6 +1190,8 @@ def copy_to_media_cache(file_paths):
         return cached_paths[0]  # Return the single path
     else:
         return cached_paths  # Return the list of paths
+        
+        
 def check_for_unneeded_media_cache():
     # List all files in the media cache directory
     cache_files = os.listdir(media_cache_dir)
@@ -1236,6 +1211,7 @@ def check_for_unneeded_media_cache():
         if cache_file not in needed_files:
             os.remove(os.path.join(media_cache_dir, cache_file))
             debug_print(f"{GREEN}Deleted unneeded file: {cache_file}{ENDC}")
+
 
 def check_if_needed(job, source_or_target):
     with open(jobs_queue_file, 'r') as file:
@@ -1290,6 +1266,7 @@ def check_if_needed(job, source_or_target):
         else:
             debug_print(f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)}{ENDC} as it's needed by another job.\n\n")
 
+
 def preprocess_execution_providers(data):
     new_data = data.copy()
     for key, value in new_data.items():
@@ -1305,7 +1282,8 @@ def preprocess_execution_providers(data):
                 # Assuming you don't want to keep original values that don't match, skip the else clause
             new_data[key] = new_providers  # Replace the old list with the new one
     return new_data
-    
+   
+   
 ##################################
 #startup_init_checks_and_cleanup     
 ##################################
@@ -1319,7 +1297,7 @@ working_dir = os.path.normpath(os.path.join(base_dir, user_dir))
 media_cache_dir = os.path.normpath(os.path.join(working_dir, "mediacache"))
 thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
-debugging = True
+debugging = False
 keep_completed_jobs = False
 ADD_JOB_BUTTON = gradio.Button("Add Job ", variant="primary")
 RUN_JOBS_BUTTON = gradio.Button("Run Jobs", variant="primary")
@@ -1330,6 +1308,7 @@ JOB_IS_EXECUTING = 0
 PENDING_JOBS_COUNT = 0
 CURRENT_JOB_NUMBER = 0
 edit_queue_window = 0
+STATUS_WINDOW = gradio.Textbox(label="Job Status")
 root = None
 pending_jobs_var = None
 PENDING_JOBS_COUNT = 0
@@ -1363,9 +1342,9 @@ if not os.path.exists(media_cache_dir):
 create_and_verify_json(jobs_queue_file)
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
-print_existing_jobs()
+count_existing_jobs()
 
-def run(ui: gradio.Blocks) -> None:
-    global server
-    concurrency_count = min(8, multiprocessing.cpu_count())
-    ui.queue(concurrency_count=concurrency_count).launch(show_api=False, inbrowser=True, quiet=False)
+
+def run(ui : gradio.Blocks) -> None:
+	concurrency_count = min(8, multiprocessing.cpu_count())
+	ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, share=True, inbrowser = facefusion.globals.open_browser)
