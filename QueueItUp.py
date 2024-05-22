@@ -104,7 +104,7 @@ def listen() -> None:
 def assemble_queue():
     global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
     if not facefusion.globals.source_paths or not facefusion.globals.target_path or not facefusion.globals.output_path:
-        custom_print(f"{RED}Whoops!!!, first create your Job(s) using the standard facefusion method then click add job{ENDC}\n\n")
+        custom_print(f"{RED}Whoops!!!, first create your Job using the standard facefusion method then click add job{ENDC}\n\n")
         return STATUS_WINDOW.value
 
     # default_values are already initialized, do not call for new default except if sd-webui version
