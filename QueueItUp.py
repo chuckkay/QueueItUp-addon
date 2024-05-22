@@ -1,5 +1,5 @@
 import multiprocessing
-import gradio
+import gradio as gr
 import os
 import re
 import sys
@@ -16,7 +16,6 @@ from io import BytesIO
 import facefusion.globals
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
 
-
 def pre_check() -> bool:
     return True
 
@@ -24,64 +23,66 @@ def pre_check() -> bool:
 def pre_render() -> bool:
     return True
 
-
-def render() -> gradio.Blocks:
-    global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW
-    with gradio.Blocks() as layout:
-        with gradio.Row():
-            with gradio.Column(scale = 2):
-                with gradio.Blocks():
+def render() -> gr.Blocks:
+    global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, status_window
+    with gr.Blocks() as layout:
+        with gr.Row():
+            with gr.Column(scale=2):
+                with gr.Blocks():
                     about.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     frame_processors.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     frame_processors_options.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     execution.render()
                     execution_thread_count.render()
                     execution_queue_count.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     memory.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     temp_frame.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     output_options.render()
-            with gradio.Column(scale = 2):
-                with gradio.Blocks():
+            with gr.Column(scale=2):
+                with gr.Blocks():
                     source.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     target.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     output.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     STATUS_WINDOW.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     ADD_JOB_BUTTON.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     RUN_JOBS_BUTTON.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     EDIT_JOB_BUTTON.render()
-            with gradio.Column(scale = 3):
-                with gradio.Blocks():
+            with gr.Column(scale=3):
+                with gr.Blocks():
                     preview.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     trim_frame.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     face_selector.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     face_masker.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     face_analyser.render()
-                with gradio.Blocks():
+                with gr.Blocks():
                     common_options.render()
-    return layout
 
+    
+    
+    return layout
+    
 
 def listen() -> None:
     global EDIT_JOB_BUTTON, STATUS_WINDOW
     ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
     RUN_JOBS_BUTTON.click(execute_jobs, outputs=STATUS_WINDOW)
-    EDIT_JOB_BUTTON.click(edit_queue)
+    EDIT_JOB_BUTTON.click(edit_queue, outputs=STATUS_WINDOW)
     frame_processors.listen()
     frame_processors_options.listen()
     execution.listen()
@@ -100,9 +101,12 @@ def listen() -> None:
     face_analyser.listen()
     common_options.listen()
 
-
 def assemble_queue():
     global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
+    if not facefusion.globals.source_paths or not facefusion.globals.target_path or not facefusion.globals.output_path:
+        custom_print(f"{RED}Whoops!!!, first create your Job(s) using the standard facefusion method then click add job{ENDC}\n\n")
+        return STATUS_WINDOW.value
+
     # default_values are already initialized, do not call for new default except if sd-webui version
     if automatic1111:
         default_values = get_default_values_from_ini()
@@ -110,7 +114,6 @@ def assemble_queue():
     current_values = get_values_from_globals('current_values')
 
     differences = {}
-    ###keys_to_skip = ["source_paths", "target_path", "output_path", "headless", "ui_layouts", "face_recognizer_model"]
     keys_to_skip = ["source_paths", "target_path", "output_path", "ui_layouts", "headless"]
     if "frame-processors" in current_values:
         frame_processors = current_values["frame-processors"]
@@ -217,167 +220,6 @@ def assemble_queue():
         custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue, {YELLOW}  Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs\n\n{ENDC}")
     print_existing_jobs()
     return STATUS_WINDOW.value
-### testing internal method
-
-def test_job_args(job):
-
-    # Check and consolidate source paths
-    if isinstance(job['sourcecache'], list):
-        arg_source_paths = [arg for p in job['sourcecache'] for arg in ['-s', p]]
-    else:
-        arg_source_paths = ['-s', job["sourcecache"]]
-    
-    # Target and output paths
-    arg_target_path = ['-t', job["targetcache"]]
-    arg_output_path = ['-o', job["output_path"]]
-    arg_headless = [job["headless"]] 
-    # Split job_args if it's a string
-    job_args = job['job_args'].split() if isinstance(job['job_args'], str) else job['job_args']
-
-    # Combine all arguments into a single list
-    combined_args = arg_source_paths + arg_target_path + arg_output_path + arg_headless + job_args
-
-    # Print debug statement to verify combined_args
-    debug_print("combined_args:", combined_args)
-
-    # Save the original sys.argv
-    original_argv = sys.argv
-
-    # Modify sys.argv to include only the new arguments
-    sys.argv = ['run2.py'] + combined_args
-    core2.cli()
-    sys.argv = original_argv
-        
-        
-def run_job_args(current_run_job):
-
-    if isinstance(current_run_job['sourcecache'], list):
-        arg_source_paths = ' '.join(f'-s "{p}"' for p in current_run_job['sourcecache'])
-    else:
-        arg_source_paths = f"-s \"{current_run_job['sourcecache']}\""
-        
-    arg_target_path = f"-t \"{current_run_job['targetcache']}\""
-    arg_output_path = f"-o \"{current_run_job['output_path']}\""
-
-    simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
-    simulated_cmd = simulated_args.replace('\\\\', '\\')
-    ui_layouts = 'ui_layouts'
-    setattr(facefusion.globals, ui_layouts, ['QueueItUp'])
-
-    if automatic1111:
-        print (f"{venv_python} {base_dir}\\run2.py {simulated_cmd}")
-        process = subprocess.Popen(
-            f"{venv_python} {base_dir}\\run2.py {simulated_cmd}",
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1  # Line-buffered
-        )
-    else:
-        process = subprocess.Popen(
-            f"python run.py {simulated_cmd}",
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1  # Line-buffered
-        )
-
-    stdout_lines = []
-    stderr_lines = []
-
-    def handle_output(stream, lines, is_stdout):
-        previous_line_was_progress = False
-        while True:
-            line = stream.readline()
-            if line == '' and process.poll() is not None:
-                break
-            if line:
-                lines.append(line)
-                label = f"{BLUE}Job# {CURRENT_JOB_NUMBER}{ENDC}"
-                if line.startswith("Processing:") or line.startswith("Analysing:"):
-                    print(f"\r{label} - {GREEN}{line.strip()[:100]}{ENDC}", end='', flush=True)
-                    previous_line_was_progress = True
-                else:
-                    if previous_line_was_progress:
-                        print()  # Move to the next line before printing a new non-progress message
-                        previous_line_was_progress = False
-                    if "error" in line.lower() or "failed" in line.lower():
-                        print(f"{label}: {RED}{line.strip()}{ENDC}")
-                    else:
-                        print(f"{label}: {YELLOW}{line.strip()}{ENDC}")
-    stdout_thread = threading.Thread(target=handle_output, args=(process.stdout, stdout_lines, True))
-    stderr_thread = threading.Thread(target=handle_output, args=(process.stderr, stderr_lines, False))
-
-    stdout_thread.start()
-    stderr_thread.start()
-
-    stdout_thread.join()
-    stderr_thread.join()
-
-    return_code = process.poll()
-
-    stdout = ''.join(stdout_lines)
-    stderr = ''.join(stderr_lines)
-
-    # Check for errors in the output
-    if "error" in stdout.lower() or "error" in stderr.lower() or "failed" in stdout.lower() or "failed" in stderr.lower():
-        current_run_job['status'] = 'failed'
-        return_code = 1
-    elif return_code == 0:
-        current_run_job['status'] = 'completed'
-    else:
-        current_run_job['status'] = 'failed'
-
-    return current_run_job
-    ###return return_code
-
-
-def get_target_size(file_path):
-    # Get the file extension
-    current_extension = file_path.lower().rsplit('.', 1)[-1]
-    target_filetype = None
-    
-    # Determine if the file is an image or video
-    if current_extension in ['jpg', 'jpeg', 'png']:
-        target_filetype = 'Image'
-    elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
-        target_filetype = 'Video'
-    
-    if target_filetype == 'Video':
-        result = subprocess.run(
-            ['ffmpeg', '-i', file_path],
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        duration = re.search(r'Duration: (\d+):(\d+):(\d+.\d+)', result.stderr)
-        if duration:
-            hours, minutes, seconds = map(float, duration.groups())
-            if hours > 0:
-                size_info = f"{int(hours)} hour{'s' if hours > 1 else ''} {int(minutes)} min{'s' if minutes > 1 else ''} long"
-            elif minutes > 0:
-                size_info = f"{int(minutes)} min{'s' if minutes > 1 else ''} {int(seconds)} sec{'s' if seconds > 1 else ''} long"
-            else:
-                size_info = f"{int(seconds)} second{'s' if seconds > 1 else ''} long"
-        else:
-            size_info = "Unknown duration"
-    elif target_filetype == 'Image':
-        result = subprocess.run(
-            ['ffmpeg', '-i', file_path],
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        dimensions = re.search(r'Stream.*Video.* (\d+)x(\d+)', result.stderr)
-        if dimensions:
-            width, height = dimensions.groups()
-            size_info = f"{width} wide x {height} heigh in pixels"
-        else:
-            size_info = "Unknown dimensions"
-    else:
-        size_info = "Unknown file type"
-    
-    return target_filetype, size_info
 
         
 def execute_jobs():
@@ -418,14 +260,14 @@ def execute_jobs():
             source_basenames = [os.path.basename(path) for path in current_run_job['sourcecache']]
         else:
             source_basenames = os.path.basename(current_run_job['sourcecache'])
-        target_filetype, target_size = get_target_size(current_run_job['targetcache'])
+        target_filetype, target_size = get_target_info(current_run_job['targetcache'])
         custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with source {GREEN}{source_basenames}{YELLOW} to -> the Target {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])} {YELLOW}which is {target_size} {ENDC}\n\n")
-########
+##
         # test_job_args(current_run_job)
         # current_run_job['status'] = 'completed'
         run_job_args(current_run_job)
 #
-########
+##
         if current_run_job['status'] == 'failed':
             source_basenames = [os.path.basename(path) for path in current_run_job['sourcecache']] if isinstance(current_run_job['sourcecache'], list) else [os.path.basename(current_run_job['sourcecache'])]
             custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {RED} failed. Please check the validity of {source_basenames} and {RED}{os.path.basename(current_run_job['targetcache'])}.{BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}\n")
@@ -1067,7 +909,196 @@ def edit_queue():
         edit_queue()
     # update_job_listbox()
 
+### testing internal method
 
+def test_job_args(job):
+
+    # Check and consolidate source paths
+    if isinstance(job['sourcecache'], list):
+        arg_source_paths = [arg for p in job['sourcecache'] for arg in ['-s', p]]
+    else:
+        arg_source_paths = ['-s', job["sourcecache"]]
+    
+    # Target and output paths
+    arg_target_path = ['-t', job["targetcache"]]
+    arg_output_path = ['-o', job["output_path"]]
+    arg_headless = [job["headless"]] 
+    # Split job_args if it's a string
+    job_args = job['job_args'].split() if isinstance(job['job_args'], str) else job['job_args']
+
+    # Combine all arguments into a single list
+    combined_args = arg_source_paths + arg_target_path + arg_output_path + arg_headless + job_args
+
+    # Print debug statement to verify combined_args
+    debug_print("combined_args:", combined_args)
+
+    # Save the original sys.argv
+    original_argv = sys.argv
+
+    # Modify sys.argv to include only the new arguments
+    sys.argv = ['run2.py'] + combined_args
+    core2.cli()
+    sys.argv = original_argv
+        
+        
+def run_job_args(current_run_job):
+
+    if isinstance(current_run_job['sourcecache'], list):
+        arg_source_paths = ' '.join(f'-s "{p}"' for p in current_run_job['sourcecache'])
+    else:
+        arg_source_paths = f"-s \"{current_run_job['sourcecache']}\""
+        
+    arg_target_path = f"-t \"{current_run_job['targetcache']}\""
+    arg_output_path = f"-o \"{current_run_job['output_path']}\""
+
+    simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
+    simulated_cmd = simulated_args.replace('\\\\', '\\')
+    ui_layouts = 'ui_layouts'
+    setattr(facefusion.globals, ui_layouts, ['QueueItUp'])
+
+    if automatic1111:
+        print (f"{venv_python} {base_dir}\\run2.py {simulated_cmd}")
+        process = subprocess.Popen(
+            f"{venv_python} {base_dir}\\run2.py {simulated_cmd}",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1  # Line-buffered
+        )
+    else:
+        process = subprocess.Popen(
+            f"python run.py {simulated_cmd}",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1  # Line-buffered
+        )
+
+    stdout_lines = []
+    stderr_lines = []
+
+    def handle_output(stream, lines, is_stdout):
+        previous_line_was_progress = False
+        while True:
+            line = stream.readline()
+            if line == '' and process.poll() is not None:
+                break
+            if line:
+                lines.append(line)
+                label = f"{BLUE}Job# {CURRENT_JOB_NUMBER}{ENDC}"
+                if line.startswith("Processing:") or line.startswith("Analysing:"):
+                    print(f"\r{label} - {GREEN}{line.strip()[:100]}{ENDC}", end='', flush=True)
+                    previous_line_was_progress = True
+                else:
+                    if previous_line_was_progress:
+                        print()  # Move to the next line before printing a new non-progress message
+                        previous_line_was_progress = False
+                    if "error" in line.lower() or "failed" in line.lower():
+                        print(f"{label}: {RED}{line.strip()}{ENDC}")
+                    else:
+                        print(f"{label}: {YELLOW}{line.strip()}{ENDC}")
+    stdout_thread = threading.Thread(target=handle_output, args=(process.stdout, stdout_lines, True))
+    stderr_thread = threading.Thread(target=handle_output, args=(process.stderr, stderr_lines, False))
+
+    stdout_thread.start()
+    stderr_thread.start()
+
+    stdout_thread.join()
+    stderr_thread.join()
+
+    return_code = process.poll()
+
+    stdout = ''.join(stdout_lines)
+    stderr = ''.join(stderr_lines)
+
+    # Check for errors in the output
+    if "error" in stdout.lower() or "error" in stderr.lower() or "failed" in stdout.lower() or "failed" in stderr.lower():
+        current_run_job['status'] = 'failed'
+        return_code = 1
+    elif return_code == 0:
+        current_run_job['status'] = 'completed'
+    else:
+        current_run_job['status'] = 'failed'
+
+    return current_run_job
+    ###return return_code
+
+
+def get_target_info(file_path):
+    # Get the file extension
+    current_extension = file_path.lower().rsplit('.', 1)[-1]
+    target_filetype = None
+    file_info = ""
+    
+    # Determine if the file is an image or video
+    if current_extension in ['jpg', 'jpeg', 'png']:
+        target_filetype = 'Image'
+    elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
+        target_filetype = 'Video'
+    
+    if target_filetype == 'Video':
+        # Get video properties
+        process = subprocess.Popen(
+            ['ffmpeg', '-i', file_path],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            universal_newlines=True
+        )
+        stdout, stderr = process.communicate()
+        
+        duration = re.search(r'Duration: (\d+):(\d+):(\d+.\d+)', stderr)
+        height = re.search(r'Stream.*Video.* (\d+)x(\d+)', stderr)
+        fps = re.search(r'(\d+(\.\d+)?) fps', stderr)
+        bitrate = re.search(r'bitrate: (\d+(\.\d+)?) kb/s', stderr)
+        
+        if duration:
+            hours, minutes, seconds = map(float, duration.groups())
+            if hours > 0:
+                size_info = f"{int(hours)} hour{'s' if hours > 1 else ''} {int(minutes)} min{'s' if minutes > 1 else ''} long"
+            elif minutes > 0:
+                size_info = f"{int(minutes)} min{'s' if minutes > 1 else ''} {int(seconds)} sec{'s' if seconds > 1 else ''} long"
+            else:
+                size_info = f"{int(seconds)} second{'s' if seconds > 1 else ''} long"
+        else:
+            size_info = "Unknown duration"
+        
+        if height and fps and bitrate:
+            width, height = height.groups()
+            fps = fps.group(1)
+            bitrate = bitrate.group(1)
+            encodeinfo = f"{width}x{height} pixels, {fps} fps, {bitrate} kb/s bitrate"
+            file_info = f"{size_info}, {encodeinfo}"
+        else:
+            file_info = size_info
+    
+    elif target_filetype == 'Image':
+        process = subprocess.Popen(
+            ['ffmpeg', '-i', file_path],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            universal_newlines=True
+        )
+        stdout, stderr = process.communicate()
+        
+        dimensions = re.search(r'Stream.*Video.* (\d+)x(\d+)', stderr)
+        if dimensions:
+            width, height = dimensions.groups()
+            size_info = f"{width} wide x {height} high in pixels"
+        else:
+            size_info = "Unknown dimensions"
+        file_info = size_info
+    else:
+        file_info = "Unknown file type"
+    
+    return target_filetype, file_info
+
+# Example usage
+# Uncomment the line below to test with a specific file
+# print(get_target_size('path_to_your_video_or_image_file'))
+
+    
 def get_default_values_from_ini():
     # Only needed for Sd-webui version. Reads and parses default values from the ini file.
     default_values = {}
@@ -1122,31 +1153,50 @@ def get_values_from_globals(state_name):
         debug_print(f"{state_name}.txt created")
     return state_dict
 
-
 def debug_print(*msgs):
     if debugging:
         custom_print(*msgs)
 
-
 def custom_print(*msgs):
-    justtextmsg = " ".join(str(msg) for msg in msgs if msg not in ["{RED}", "{GREEN}", "{YELLOW}", "{BLUE}", "{ENDC}"])
-    message = " ".join(str(msg) for msg in msgs)
-    STATUS_WINDOW.value = justtextmsg
-    # ANSI Color Codes
+    global last_justtextmsg
     RED = '\033[91m'
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
     ENDC = '\033[0m'
-    print(message)  # Print to terminal with ANSI coloring
-    return STATUS_WINDOW.value
+    
+    message = " ".join(str(msg) for msg in msgs)
+    justtextmsg = re.sub(r'\033\[\d+m', '', message)
+    last_justtextmsg = justtextmsg
+
+    print(message)
+    return last_justtextmsg
+
+
+
+
+def print_existing_jobs():
+    count_existing_jobs()
+    if JOB_IS_RUNNING:
+        message = f"{YELLOW}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) being Processed - Click Add Job to Queue more Jobs{ENDC}"
+    else:
+        if PENDING_JOBS_COUNT > 0:
+            message = f"{YELLOW}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Jobs to Execute Them, or continue adding more jobs to the queue{ENDC}"
+        else:
+            message = f"{YELLOW}There are No jobs in the queue - Click Add Job instead of Start{ENDC}"
+    custom_print(message)
+        # Strip ANSI codes for STATUS_WINDOW
+    statusmessage = re.sub(r'\033\[\d+m', '', message)
+    STATUS_WINDOW.value = statusmessage
+    
+    return statusmessage
     
     
 def count_existing_jobs():
     global PENDING_JOBS_COUNT
     jobs = load_jobs(jobs_queue_file)
     PENDING_JOBS_COUNT = len([job for job in jobs if job['status'] in ['pending']])
-    return PENDING_JOBS_COUNT, 
+    return PENDING_JOBS_COUNT 
 
 
 def update_counters():
@@ -1193,20 +1243,6 @@ def format_cli_value(value):
     if value is None:
         return 'None'
     return str(value)
-
-
-def print_existing_jobs():
-    count_existing_jobs()
-    if JOB_IS_RUNNING:
-        message = f"There is {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) being Processed - Click Add Job to Queue more Jobs"
-    else:
-        if PENDING_JOBS_COUNT > 0:
-            message = f"There is {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Jobs to Execute Them, or continue adding more jobs to the queue"
-        else:
-            message = "There is 0 job(s) in the queue - Click Add Job instead of Start"
-    custom_print(message + "\n\n")
-    STATUS_WINDOW.value = message
-    return STATUS_WINDOW.value
 
 
 def check_for_completed_failed_or_aborted_jobs():
@@ -1359,9 +1395,8 @@ def preprocess_execution_providers(data):
     return new_data
    
    
-##################################
+
 #startup_init_checks_and_cleanup     
-##################################
 #Globals and toggles
 script_root = os.path.dirname(os.path.abspath(__file__))
 base_dir = os.path.dirname(os.path.dirname(os.path.dirname(script_root)))
@@ -1379,16 +1414,17 @@ thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
 debugging = True
 keep_completed_jobs = False
-ADD_JOB_BUTTON = gradio.Button("Add Job ", variant="primary")
-RUN_JOBS_BUTTON = gradio.Button("Run Jobs", variant="primary")
-EDIT_JOB_BUTTON = gradio.Button("Edit Jobs")
+ADD_JOB_BUTTON = gr.Button("Add Job ", variant="primary")
+RUN_JOBS_BUTTON = gr.Button("Run Jobs", variant="primary")
+EDIT_JOB_BUTTON = gr.Button("Edit Jobs")
 #status_priority = {'editing': 0, 'pending': 1, 'failed': 2, 'executing': 3, 'completed': 4}
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
 PENDING_JOBS_COUNT = 0
 CURRENT_JOB_NUMBER = 0
 edit_queue_window = 0
-STATUS_WINDOW = gradio.Textbox(label="Job Status")
+STATUS_WINDOW =  gr.Textbox(label="Job Status", interactive=True)
+last_justtextmsg = ""
 root = None
 pending_jobs_var = None
 PENDING_JOBS_COUNT = 0
@@ -1414,7 +1450,13 @@ debug_print("Working Directory:", working_dir)
 debug_print("Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
 debug_print(f"{BLUE}Welcome Back To FaceFusion Queueing Addon\n\n")
-debug_print(f"Checking Status{ENDC}\n\n")
+debug_print("COLOR OUTPUT KEY")
+debug_print(f"{BLUE}BLUE = normal QueueItUp color output key")
+debug_print(f"{GREEN}GREEN = file name, cache managment or processing progress")
+debug_print(f"{YELLOW}YELLOW = informational")
+debug_print(f"{RED}RED = Problem detected{ENDC}\n\n")
+
+debug_print(f"{YELLOW}Checking Status{ENDC}\n")
 create_and_verify_json(jobs_queue_file)
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
@@ -1422,24 +1464,12 @@ count_existing_jobs()
 print_existing_jobs()
 
 
-def run(ui : gradio.Blocks) -> None:
+def run(ui : gr.Blocks) -> None:
     concurrency_count = min(8, multiprocessing.cpu_count())
     if automatic1111:
         ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False)       
     else:
         ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser)
-###import ast
 
-###import tempfile
-
-###import socket
-###import shlex
-###import logging
-###import platform
-
-###import configparser
-
-###from tkinter.filedialog import askdirectory
-
-#from facefusion import core2, process_manager
-
+        #this works but good luck getting it to update if you change icon  
+        #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
