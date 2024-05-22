@@ -24,7 +24,7 @@ def pre_render() -> bool:
     return True
 
 def render() -> gr.Blocks:
-    global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, status_window
+    global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW
     with gr.Blocks() as layout:
         with gr.Row():
             with gr.Column(scale=2):
@@ -103,10 +103,19 @@ def listen() -> None:
 
 def assemble_queue():
     global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
-    if not facefusion.globals.source_paths or not facefusion.globals.target_path or not facefusion.globals.output_path:
-        custom_print(f"{RED}Whoops!!!, first create your Job using the standard facefusion method then click add job{ENDC}\n\n")
-        return STATUS_WINDOW.value
+    missing_paths = []
 
+    if not facefusion.globals.source_paths:
+        missing_paths.append("source paths")
+    if not facefusion.globals.target_path:
+        missing_paths.append("target path")
+    if not facefusion.globals.output_path:
+        missing_paths.append("output path")
+
+    if missing_paths:
+        whats_missing = ", ".join(missing_paths)
+        custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}\n\n")
+        return STATUS_WINDOW.value
 
 
     current_values = get_values_from_globals('current_values')
@@ -173,7 +182,6 @@ def assemble_queue():
         with open(os.path.join(working_dir, "arguments.txt"), "w") as file:
             file.write(json.dumps(arguments) + "\n")
     job_args = f"{arguments}"
-    debug_print(f"{GREEN}Target file{ENDC} copied to Media Cache folder: {GREEN}{os.path.basename(cache_target_path)}{ENDC}\n\n")
 
     if isinstance(cache_source_paths, str):
         cache_source_paths = [cache_source_paths]
@@ -216,7 +224,6 @@ def assemble_queue():
         custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}\n\n")
     else:
         custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue, {YELLOW}  Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs\n\n{ENDC}")
-    print_existing_jobs()
     return STATUS_WINDOW.value
 
         
@@ -907,6 +914,8 @@ def edit_queue():
     if __name__ == '__main__':
         edit_queue()
     # update_job_listbox()
+    PENDING_JOBS_COUNT = count_existing_jobs()
+    print_existing_jobs()
     return STATUS_WINDOW.value
 
 ### testing internal method
@@ -1097,36 +1106,7 @@ def get_target_info(file_path):
 # Example usage
 # Uncomment the line below to test with a specific file
 # print(get_target_size('path_to_your_video_or_image_file'))
-
-    
-def get_default_values_from_ini():
-    # Only needed for Sd-webui version. Reads and parses default values from the ini file.
-    default_values = {}
-    with open(os.path.join(base_dir, "default_values.ini"), "r") as file:
-        for line in file:
-            key, val = line.strip().split(": ", 1)
-            if val == "None":
-                parsed_val = None
-            else:
-                # Parsing logic directly within this function
-                if val.startswith('[') and val.endswith(']'):
-                    parsed_val = [v.strip('"').strip("'") for v in val[1:-1].split(', ')]
-                elif val.startswith('(') and val.endswith(')'):
-                    parsed_val = tuple(int(v.strip('"').strip("'")) if v.strip('"').strip("'").isdigit() else v.strip('"').strip("'") for v in val[1:-1].split(', '))
-                else:
-                    try:
-                        parsed_val = int(val)
-                    except ValueError:
-                        try:
-                            parsed_val = float(val)
-                        except ValueError:
-                            parsed_val = val.strip('"').strip("'")
-            default_values[key] = parsed_val
-    with open(os.path.join(working_dir, "default_values.txt"), "w") as file:
-        for key, val in default_values.items():
-            file.write(f"{key}: {val}\n")
-    return default_values
-    
+   
     
 def get_values_from_globals(state_name):
     state_dict = {}
@@ -1178,17 +1158,16 @@ def custom_print(*msgs):
 def print_existing_jobs():
     count_existing_jobs()
     if JOB_IS_RUNNING:
-        message = f"{YELLOW}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) being Processed - Click Add Job to Queue more Jobs{ENDC}"
+        message = f"{BLUE}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) being Processed - Click Add Job to Queue more Jobs{ENDC}"
     else:
         if PENDING_JOBS_COUNT > 0:
-            message = f"{YELLOW}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Jobs to Execute Them, or continue adding more jobs to the queue{ENDC}"
+            message = f"{GREEN}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Jobs to Execute Them, or continue adding more jobs to the queue{ENDC}"
         else:
             message = f"{YELLOW}There are No jobs in the queue - Click Add Job instead of Start{ENDC}"
     custom_print(message)
         # Strip ANSI codes for STATUS_WINDOW
     message = re.sub(r'\033\[\d+m', '', message)
     STATUS_WINDOW.value = message
-    
     return STATUS_WINDOW.value
     
     
@@ -1358,7 +1337,8 @@ def check_if_needed(job, source_or_target):
             else:
                 action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job."
             debug_print(f"{action_message}\n\n")
-
+            count_existing_jobs
+            print_existing_jobs
     # Check and handle targetcache path
     if source_or_target in ['both', 'target']:
         target_cache_path = job['targetcache']
@@ -1369,14 +1349,16 @@ def check_if_needed(job, source_or_target):
             if os.path.exists(normalized_target_path):
                 try:
                     os.remove(normalized_target_path)
-                    debug_print(f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs\n\n")
+                    action_message = (f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs\n\n")
                 except Exception as e:
-                    debug_print(f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}\n\n")
+                    action_message = (f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}\n\n")
             else:
-                debug_print(f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist.\n\n")
+                action_message = (f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist.\n\n")
         else:
-            debug_print(f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job.\n\n")
-
+            action_message = (f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job.\n\n")
+        debug_print(f"{action_message}\n\n")
+        count_existing_jobs
+        print_existing_jobs
 
 def preprocess_execution_providers(data):
     new_data = data.copy()
@@ -1423,7 +1405,7 @@ JOB_IS_EXECUTING = 0
 PENDING_JOBS_COUNT = count_existing_jobs()
 CURRENT_JOB_NUMBER = 0
 edit_queue_window = 0
-STATUS_WINDOW =  gr.Textbox(label="Job Status", interactive=True)
+STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
 last_justtextmsg = ""
 root = None
 pending_jobs_var = None
@@ -1437,8 +1419,9 @@ if automatic1111:
     import facefusion.core2 as core2
     venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
     debug_print("Venv Python Path:", venv_python)
-    default_values = get_default_values_from_ini()
-if not automatic1111: default_values = get_values_from_globals("default_values")
+#if not automatic1111: default_values = get_values_from_globals("default_values")
+default_values = get_values_from_globals("default_values")
+
     # ANSI Color Codes     
 RED = '\033[91m'     #use this  
 GREEN = '\033[92m'     #use this  
@@ -1449,8 +1432,8 @@ debug_print("Base Directory:", base_dir)
 debug_print("Working Directory:", working_dir)
 debug_print("Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
-debug_print(f"{BLUE}Welcome Back To FaceFusion Queueing Addon\n\n")
-debug_print("QUEUEITUP COLOR OUTPUT KEY")
+debug_print(f"{BLUE}Welcome Back To FaceFusion Queueing Addon{ENDC}\n\n")
+debug_print(f"QUEUEITUP{BLUE} COLOR OUTPUT KEY")
 debug_print(f"{BLUE}BLUE = normal QueueItUp color output key")
 debug_print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 debug_print(f"{YELLOW}YELLOW = informational")
