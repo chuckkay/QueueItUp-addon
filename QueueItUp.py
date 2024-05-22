@@ -303,16 +303,16 @@ def execute_jobs():
     JOB_IS_RUNNING = 0
     save_jobs(jobs_queue_file, jobs)
     check_for_unneeded_media_cache()
-    STATUS_WINDOW.value = message
+    STATUS_WINDOW.value = last_justtextmsg
     return STATUS_WINDOW.value
 
 
 def edit_queue():
     global root, frame, output_text, edit_queue_window, STATUS_WINDOW, default_values, jobs_queue_file, jobs, job, image_references, thumbnail_dir, working_dir, PENDING_JOBS_COUNT, pending_jobs_var
-
     root = tk.Tk()
     jobs = load_jobs(jobs_queue_file)
     PENDING_JOBS_COUNT = count_existing_jobs()
+    print_existing_jobs()
 
     root.geometry('1200x800')
     root.title("Edit Queued Jobs")
@@ -907,6 +907,7 @@ def edit_queue():
     if __name__ == '__main__':
         edit_queue()
     # update_job_listbox()
+    return STATUS_WINDOW.value
 
 ### testing internal method
 
@@ -1169,9 +1170,9 @@ def custom_print(*msgs):
     last_justtextmsg = justtextmsg
 
     print(message)
-    return last_justtextmsg
-
-
+    STATUS_WINDOW.value = last_justtextmsg
+    
+    return STATUS_WINDOW.value
 
 
 def print_existing_jobs():
@@ -1185,10 +1186,10 @@ def print_existing_jobs():
             message = f"{YELLOW}There are No jobs in the queue - Click Add Job instead of Start{ENDC}"
     custom_print(message)
         # Strip ANSI codes for STATUS_WINDOW
-    statusmessage = re.sub(r'\033\[\d+m', '', message)
-    STATUS_WINDOW.value = statusmessage
+    message = re.sub(r'\033\[\d+m', '', message)
+    STATUS_WINDOW.value = message
     
-    return statusmessage
+    return STATUS_WINDOW.value
     
     
 def count_existing_jobs():
@@ -1349,13 +1350,13 @@ def check_if_needed(job, source_or_target):
                 if os.path.exists(normalized_source_path):
                     try:
                         os.remove(normalized_source_path)
-                        action_message = f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_source_path)}{ENDC} as it is no longer needed by any other jobs"
+                        action_message = f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs"
                     except Exception as e:
-                        action_message = f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_source_path)}{ENDC}: {e}"
+                        action_message = f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}"
                 else:
-                    action_message = f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_source_path)}{ENDC} as it does not exist."
+                    action_message = f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist."
             else:
-                action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)}{ENDC} as it's needed by another job."
+                action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job."
             debug_print(f"{action_message}\n\n")
 
     # Check and handle targetcache path
@@ -1368,13 +1369,13 @@ def check_if_needed(job, source_or_target):
             if os.path.exists(normalized_target_path):
                 try:
                     os.remove(normalized_target_path)
-                    debug_print(f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_target_path)}{ENDC} as it is no longer needed by any other jobs\n\n")
+                    debug_print(f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs\n\n")
                 except Exception as e:
-                    debug_print(f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_target_path)}{ENDC}: {e}\n\n")
+                    debug_print(f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}\n\n")
             else:
-                debug_print(f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_target_path)}{ENDC} as it does not exist.\n\n")
+                debug_print(f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist.\n\n")
         else:
-            debug_print(f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)}{ENDC} as it's needed by another job.\n\n")
+            debug_print(f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job.\n\n")
 
 
 def preprocess_execution_providers(data):
@@ -1419,14 +1420,13 @@ EDIT_JOB_BUTTON = gr.Button("Edit Jobs")
 #status_priority = {'editing': 0, 'pending': 1, 'failed': 2, 'executing': 3, 'completed': 4}
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
-PENDING_JOBS_COUNT = 0
+PENDING_JOBS_COUNT = count_existing_jobs()
 CURRENT_JOB_NUMBER = 0
 edit_queue_window = 0
 STATUS_WINDOW =  gr.Textbox(label="Job Status", interactive=True)
 last_justtextmsg = ""
 root = None
 pending_jobs_var = None
-PENDING_JOBS_COUNT = 0
 image_references = {}
 default_values = {}
 #code to determin if running inside atutomatic1111
@@ -1460,7 +1460,6 @@ debug_print(f"{YELLOW}Checking Status{ENDC}\n")
 create_and_verify_json(jobs_queue_file)
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
-count_existing_jobs()
 print_existing_jobs()
 
 
