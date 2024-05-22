@@ -107,9 +107,7 @@ def assemble_queue():
         custom_print(f"{RED}Whoops!!!, first create your Job using the standard facefusion method then click add job{ENDC}\n\n")
         return STATUS_WINDOW.value
 
-    # default_values are already initialized, do not call for new default except if sd-webui version
-    if automatic1111:
-        default_values = get_default_values_from_ini()
+
 
     current_values = get_values_from_globals('current_values')
 
@@ -501,7 +499,8 @@ def edit_queue():
     def edit_job_arguments_text(job):
         global default_values
         job_args = job.get('job_args', '')
-        preprocessed_defaults = preprocess_execution_providers(default_values)
+        if not automatic1111:
+            preprocessed_defaults = preprocess_execution_providers(default_values)
         edit_arg_window = tk.Toplevel()
         edit_arg_window.title("Edit Job Arguments")
         edit_arg_window.geometry("1050x500")
@@ -1436,8 +1435,9 @@ if automatic1111:
     print("automatic1111")
     from facefusion import core2
     import facefusion.core2 as core2
-if automatic1111: venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
-if automatic1111: debug_print("Venv Python Path:", venv_python)
+    venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
+    debug_print("Venv Python Path:", venv_python)
+    default_values = get_default_values_from_ini()
 if not automatic1111: default_values = get_values_from_globals("default_values")
     # ANSI Color Codes     
 RED = '\033[91m'     #use this  
@@ -1450,7 +1450,7 @@ debug_print("Working Directory:", working_dir)
 debug_print("Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
 debug_print(f"{BLUE}Welcome Back To FaceFusion Queueing Addon\n\n")
-debug_print("COLOR OUTPUT KEY")
+debug_print("QUEUEITUP COLOR OUTPUT KEY")
 debug_print(f"{BLUE}BLUE = normal QueueItUp color output key")
 debug_print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 debug_print(f"{YELLOW}YELLOW = informational")
@@ -1467,7 +1467,7 @@ print_existing_jobs()
 def run(ui : gr.Blocks) -> None:
     concurrency_count = min(8, multiprocessing.cpu_count())
     if automatic1111:
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False)       
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)       
     else:
         ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser)
 
