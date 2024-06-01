@@ -13,7 +13,6 @@ import threading
 import configparser
 import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
-from io import BytesIO
 import facefusion.globals
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
 
@@ -23,6 +22,7 @@ def pre_check() -> bool:
 
 def pre_render() -> bool:
     return True
+
 
 def render() -> gr.Blocks:
     global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW, SETTINGS_BUTTON
@@ -76,16 +76,14 @@ def render() -> gr.Blocks:
                 with gr.Blocks():
                     common_options.render()
 
-    
-    
     return layout
     
 
 def listen() -> None:
     global EDIT_JOB_BUTTON, STATUS_WINDOW
     ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
-    RUN_JOBS_BUTTON.click(execute_jobs, outputs=STATUS_WINDOW)
-    EDIT_JOB_BUTTON.click(edit_queue, outputs=STATUS_WINDOW)
+    RUN_JOBS_BUTTON.click(execute_jobs)
+    EDIT_JOB_BUTTON.click(edit_queue_window)#, outputs=STATUS_WINDOW)
     SETTINGS_BUTTON.click(queueitup_settings)
     frame_processors.listen()
     frame_processors_options.listen()
@@ -105,6 +103,15 @@ def listen() -> None:
     face_analyser.listen()
     common_options.listen()
 
+def run(ui : gr.Blocks) -> None:
+    concurrency_count = min(8, multiprocessing.cpu_count())
+    if automatic1111:
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)       
+    else:
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
+        #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
+        
+        
 def assemble_queue():
     global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
     missing_paths = []
@@ -121,19 +128,30 @@ def assemble_queue():
         custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}\n\n")
         return STATUS_WINDOW.value
 
-
     current_values = get_values_from_globals('current_values')
 
     differences = {}
-    keys_to_skip = ["source_paths", "target_path", "output_path", "ui_layouts", "headless"]
-    if "frame-processors" in current_values:
-        frame_processors = current_values["frame-processors"]
-        if "face-enhancer" not in frame_processors:
-            keys_to_skip.append("face-enhancer-model")
-        if "frame-enhancer" not in frame_processors:
-            keys_to_skip.append("frame-enhancer-model")
-        if "face-swapper" not in frame_processors:
+    keys_to_skip = ["source_paths", "target_path", "output_path", "ui_layouts", "face_recognizer_model", "headless"]
+    ### is this still needed?
+    if "frame_processors" in current_values:
+        frame_processors = current_values["frame_processors"]
+        if "face_enhancer" not in frame_processors:
+            keys_to_skip.append("face_enhancer_model")
+        if "frame_enhancer" not in frame_processors:
+            keys_to_skip.append("frame_enhancer_blend")
+        if "face_swapper" not in frame_processors:
             keys_to_skip.append("face_swapper_model")
+        if "face_debugger" not in frame_processors:
+            keys_to_skip.append("face_debugger_items")
+        if "frame_colorizer" not in frame_processors:
+            keys_to_skip.append("frame_colorizer_model")
+        if "frame_colorizer" not in frame_processors:
+            keys_to_skip.append("frame_colorizer_size")
+        if "frame_colorizer" not in frame_processors:
+            keys_to_skip.append("frame_colorizer_blend")
+        if "lip_syncer" not in frame_processors:
+            keys_to_skip.append("lip_syncer_model")
+            
     # Compare current_values against default_values and record only changed current values
     for key, current_value in current_values.items():
         if key in keys_to_skip:
@@ -183,24 +201,25 @@ def assemble_queue():
     # Construct the arguments string
     arguments = " ".join(f"--{key.replace('_', '-')} {value}" for key, value in differences.items() if value)
     if debugging:
-        with open(os.path.join(working_dir, "arguments.txt"), "w") as file:
+        with open(os.path.join(working_dir, "arguments_values.txt"), "w") as file:
             file.write(json.dumps(arguments) + "\n")
     job_args = f"{arguments}"
 
     if isinstance(cache_source_paths, str):
         cache_source_paths = [cache_source_paths]
-
+    string_frame_processors = " ".join(current_values['frame_processors'])
     new_job = {
         "job_args": job_args,
         "status": "pending",
         "headless": "--headless",
-        "frame_processors": current_values['frame_processors'],
+        "frame_processors": string_frame_processors,
         "sourcecache": (cache_source_paths),
         "targetcache": (cache_target_path),
         "output_path": (output_path),
     }
+
     if debugging:
-        with open(os.path.join(working_dir, "job_args.txt"), "w") as file:
+        with open(os.path.join(working_dir, "job_args_values.txt"), "w") as file:
             for key, val in current_values.items():
                 file.write(f"{key}: {val}\n")
 
@@ -217,12 +236,12 @@ def assemble_queue():
     if not found_editing:
         jobs.append(new_job)
         save_jobs(jobs_queue_file, jobs)
-    
-    if edit_queue_window > 0:
-        print("edit queue windows is open")
+    if root and root.winfo_exists():
+        debug_print("edit queue windows is open")
         count_existing_jobs()
-        edit_queue.refresh_frame_listbox()
-
+        save_jobs(jobs_queue_file, jobs)
+        refresh_frame_listbox()
+    
     count_existing_jobs()
     if JOB_IS_RUNNING:
         custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}\n\n")
@@ -265,17 +284,17 @@ def execute_jobs():
         printjobtype = current_run_job['frame_processors']
         custom_print(f"{BLUE}Executing Job # {CURRENT_JOB_NUMBER} of {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT}  {ENDC}\n\n")
 
+
         if isinstance(current_run_job['sourcecache'], list):
-            source_basenames = [os.path.basename(path) for path in current_run_job['sourcecache']]
+            source_basenames = f"Source Files {', '.join(os.path.basename(path) for path in current_run_job['sourcecache'])}"
         else:
-            source_basenames = os.path.basename(current_run_job['sourcecache'])
-        target_filetype, target_size = get_target_info(current_run_job['targetcache'])
-        custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with source {GREEN}{source_basenames}{YELLOW} to -> the Target {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])} {YELLOW}which is {target_size} {ENDC}\n\n")
+            source_basenames = f"Source File {os.path.basename(current_run_job['sourcecache'])}"
+
+        target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions = get_target_info(current_run_job['targetcache'], current_run_job)
+
+        custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved as a {YELLOW}{output_video_length} {output_dimensions} sized {target_filetype}{ENDC} in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
 ##
-        # test_job_args(current_run_job)
-        # current_run_job['status'] = 'completed'
         run_job_args(current_run_job)
-#
 ##
         if current_run_job['status'] == 'failed':
             source_basenames = [os.path.basename(path) for path in current_run_job['sourcecache']] if isinstance(current_run_job['sourcecache'], list) else [os.path.basename(current_run_job['sourcecache'])]
@@ -306,7 +325,6 @@ def execute_jobs():
             
             save_jobs(jobs_queue_file, jobs)
         else:#no more pending jobs
-            message = f"A total of {CURRENT_JOB_NUMBER} Jobs have completed processing,...... the Queue is now empty, Feel Free to QueueItUp some more.."
             custom_print(f"{BLUE}a total of {CURRENT_JOB_NUMBER} Jobs have completed processing,{ENDC}...... {GREEN}the Queue is now empty, {BLUE}Feel Free to QueueItUp some more..{ENDC}")
             current_run_job = None
             first_pending_job = None
@@ -314,16 +332,39 @@ def execute_jobs():
     JOB_IS_RUNNING = 0
     save_jobs(jobs_queue_file, jobs)
     check_for_unneeded_media_cache()
-    STATUS_WINDOW.value = last_justtextmsg
-    return STATUS_WINDOW.value
 
+        
+# things_to_do
+# need to make root window pop to the top when edit_queue_window is called again but already has edit_queue open and in its loop but in the background an not the forground
+
+# need to be able to call run_jobs_click and not have and not have the edit queue root window freezeing until the execute_jobs is compleated
+
+# when clone_job or batch_job adds jobs the should not go to the bottom of the job list
+    pass  
+
+def edit_queue_window():
+    global root
+    try:
+        if root and root.winfo_exists():
+            root.deiconify()  # Ensure the window is not minimized
+            root.lift()  # Lift the window to the top
+            root.focus_force()  # Force focus on the window
+            root.attributes('-topmost', True)  # Make it the topmost window
+            root.after(0, lambda: root.attributes('-topmost', False))  # Remove topmost attribute immediately after
+        else:
+            edit_queue()
+    except tk.TclError:
+        root = None
+        edit_queue()
+       
 def edit_queue():
-    global root, frame, output_text, edit_queue_window, STATUS_WINDOW, default_values, jobs_queue_file, jobs, job, image_references, thumbnail_dir, working_dir, PENDING_JOBS_COUNT, pending_jobs_var, debugging, keep_completed_jobs
+    global root, frame, canvas, edit_queue_windowstatus, STATUS_WINDOW, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
+
     root = tk.Tk()
     jobs = load_jobs(jobs_queue_file)
     PENDING_JOBS_COUNT = count_existing_jobs()
     print_existing_jobs()
-    
+
     root.geometry('1200x800')
     root.title("Edit Queued Jobs")
     root.lift()
@@ -340,8 +381,8 @@ def edit_queue():
 
     frame = tk.Frame(canvas)
     canvas.create_window((0, 0), window=frame, anchor='nw')
-    canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
-    
+    canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1 * (event.delta / 120)), "units"))
+
     custom_font = font.Font(family="Helvetica", size=12, weight="bold")
     bold_font = font.Font(family="Helvetica", size=12, weight="bold")
 
@@ -350,604 +391,654 @@ def edit_queue():
 
     close_button = tk.Button(root, text="Close Window", command=root.destroy, font=custom_font)
     close_button.pack(pady=5)
-    
-    refresh_button = tk.Button(root, text="Refresh View", command=lambda: refresh_buttonclick(), font=custom_font)
+
+    refresh_button = tk.Button(root, text="Refresh View", command=lambda: refresh_frame_listbox(), font=custom_font)
     refresh_button.pack(pady=5)
 
-    pending_jobs_button = tk.Button(root, textvariable=pending_jobs_var, command=lambda: delete_pending_jobs(), font=custom_font)
+    run_jobs_button = tk.Button(root, text="Run Pending Jobs", command=lambda: run_jobs_click(), font=custom_font)
+    run_jobs_button.pack(pady=5)
+    pending_jobs_button = tk.Button(root, textvariable=pending_jobs_var, command=lambda: jobs_to_delete("pending"), font=custom_font)
     pending_jobs_button.pack(pady=5)
 
-    missing_jobs_button = tk.Button(root, text="Delete Missing ", command=lambda: delete_missing_media_jobs(), font=custom_font)
+    missing_jobs_button = tk.Button(root, text="Delete Missing ", command=lambda: jobs_to_delete("missing"), font=custom_font)
     missing_jobs_button.pack(pady=5)
 
-    archived_jobs_button = tk.Button(root, text="Delete archived ", command=lambda: delete_archived_jobs(), font=custom_font)
+    archived_jobs_button = tk.Button(root, text="Delete archived ", command=lambda: jobs_to_delete("archived"), font=custom_font)
     archived_jobs_button.pack(pady=5)
 
-    failed_jobs_button = tk.Button(root, text="Delete Failed", command=lambda: delete_failed_jobs(), font=custom_font)
+    failed_jobs_button = tk.Button(root, text="Delete Failed", command=lambda: jobs_to_delete("failed"), font=custom_font)
     failed_jobs_button.pack(pady=5)
 
-    completed_jobs_button = tk.Button(root, text="Delete Completed", command=lambda: delete_completed_jobs(), font=custom_font)
+    completed_jobs_button = tk.Button(root, text="Delete Completed", command=lambda: jobs_to_delete("completed"), font=custom_font)
     completed_jobs_button.pack(pady=5)
+
+    edit_queue_windowstatus = 1
+    refresh_frame_listbox()
+
+    root.mainloop()
+    edit_queue_windowstatus = 0
+
+def run_jobs_click():
+    save_jobs(jobs_queue_file, jobs)
+    threading.Thread(target=execute_jobs).start()  # Run execute_jobs in a separate thread
+
+def clone_job(job):
+    clonedjob = job.copy()  # Copy the existing job to preserve other attributes
+    clonedjob['id'] = str(uuid.uuid4())  # Assign a new unique ID to the cloned job
+    jobs = load_jobs(jobs_queue_file)
     
-        
-    def refresh_buttonclick():
-        count_existing_jobs()
-        update_job_listbox()
-        refresh_frame_listbox()
+    original_index = jobs.index(job)  # Find the index of the original job
+    jobs.insert(original_index + 1, clonedjob)  # Insert the cloned job right after the original job
+    
+    save_jobs(jobs_queue_file, jobs)
+    refresh_frame_listbox()
+    
+def batch_job(job):
+    target_filetype = None
+    source_or_target = None
+    if isinstance(job['sourcecache'], str):
+        job['sourcecache'] = [job['sourcecache']]
+    current_extension = job['targetcache'].lower().rsplit('.', 1)[-1]
+    if current_extension in ['jpg', 'jpeg', 'png']:
+        target_filetype = 'Image'
+    elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
+        target_filetype = 'Video'
 
-    def refresh_frame_listbox():
-        global jobs
-        status_priority = {'editing': 0, 'executing': 1, 'pending': 2, 'failed': 3, 'missing': 4, 'completed': 5, 'archived': 6}
-        jobs = load_jobs(jobs_queue_file)
-        jobs.sort(key=lambda x: status_priority.get(x['status'], 6))
-        save_jobs(jobs_queue_file, jobs)
-        update_job_listbox()
+    def on_use_source():
+        nonlocal source_or_target
+        source_or_target = 'target'
+        dialog.destroy()
+        open_file_dialog()
 
-    def close_window():
-        save_jobs(jobs_queue_file, jobs)
-        root.destroy
-
-    def delete_pending_jobs():
-        jobs = load_jobs(jobs_queue_file)
-        jobs = [job for job in jobs if job['status'] != 'pending']
-        save_jobs(jobs_queue_file, jobs)
-        refresh_frame_listbox()
-        
-    def delete_completed_jobs():
-        jobs = load_jobs(jobs_queue_file)
-        jobs = [job for job in jobs if job['status'] != 'completed']
-        save_jobs(jobs_queue_file, jobs)
-        refresh_frame_listbox()
-
-    def delete_failed_jobs():
-        jobs = load_jobs(jobs_queue_file)
-        jobs = [job for job in jobs if job['status'] != 'failed']        
-        save_jobs(jobs_queue_file, jobs)
-        refresh_frame_listbox()
-
-    def delete_missing_media_jobs(): 
-        jobs = load_jobs(jobs_queue_file)
-        jobs = [job for job in jobs if job['status'] != 'missing']
-        save_jobs(jobs_queue_file, jobs)
-        refresh_frame_listbox()
-
-    def archive_job(job):
-        job['status'] = 'archived'
-        save_jobs(jobs_queue_file, jobs) 
-        refresh_frame_listbox()
-
-    def delete_archived_jobs(): 
-        jobs = load_jobs(jobs_queue_file)
-        for job in jobs:
-            if job['status'] == 'archived':
-                check_if_needed(job, 'both')
-        jobs = [job for job in jobs if job['status'] != 'archived']
-        save_jobs(jobs_queue_file, jobs)
-        refresh_frame_listbox()
-
-    def reload_job_in_facefusion_edit(job):
-        sourcecache_path = job.get('sourcecache')
-        targetcache_path = job.get('targetcache')
-
-        if isinstance(sourcecache_path, list):
-            missing_files = [path for path in sourcecache_path if not os.path.exists(path)]
-            if missing_files:
-                messagebox.showerror("Error", f"Cannot edit job. The following source files do not exist: {', '.join(os.path.basename(path) for path in missing_files)}")
-                return
-        else:
-            if not os.path.exists(sourcecache_path):
-                messagebox.showerror("Error", f"Cannot edit job. The source file '{os.path.basename(sourcecache_path)}' does not exist.")
-                return
-
-        if not os.path.exists(targetcache_path):
-            messagebox.showerror("Error", f"Cannot edit job. The target file '{os.path.basename(targetcache_path)}' does not exist.")
-            return
-
-        response = messagebox.askyesno("Confirm Edit", "THIS WILL REMOVE THIS PENDING JOB FROM THE QUEUE, AND LOAD IT INTO FACEFUSION WEBUI FOR EDITING, WHEN DONE EDITING CLICK START TO RUN IT OR ADD JOB TO REQUEUE IT. ARE YOU SURE YOU WANT TO EDIT THIS JOB", icon='warning')
-        if not response:
-            return
-        job['headless'] = ''
-        job['status'] = 'editing'
-        save_jobs(jobs_queue_file, jobs)
-        top = Toplevel()
-        top.title("Please Wait")
-        message_label = tk.Label(top, text="Please wait while the job loads back into FaceFusion...", padx=20, pady=20)
-        message_label.pack()
-        top.after(1000, close_window)
-        top.after(2000, top.destroy)
-        custom_print(f"{GREEN} PLEASE WAIT WHILE THE Jobs IS RELOADED IN FACEFUSION{ENDC}...... {YELLOW}THIS WILL CREATE AN ADDITIONAL PYTHON PROCESS AND YOU SHOULD CONSIDER RESTARTING FACEFUSION AFTER DOING THIS MOR THEN 3 TIMES{ENDC}")
-        root.destroy()
-        run_job_args(job)
-
-    def output_path_job(job):
-        selected_path = filedialog.askdirectory(title="Select A New Output Path for this Job")
-
-        if selected_path:
-            formatted_path = selected_path.replace('/', '\\')  
-            job['output_path'] = formatted_path
-            update_paths(job, formatted_path, 'output')
-        save_jobs(jobs_queue_file, jobs)  
-        update_job_listbox()  
-        refresh_frame_listbox()
-
-    def delete_job(job):
-        job['status'] = ('deleting')
-        source_or_target='both'
-        check_if_needed(job, 'both')
-        jobs.remove(job)
-        save_jobs(jobs_queue_file, jobs)
-        update_job_listbox()  
-        refresh_frame_listbox()
-
-    def move_job_up(index):
-        if index > 0:
-            jobs.insert(index - 1, jobs.pop(index))
-            save_jobs(jobs_queue_file, jobs)
-            update_job_listbox()
-
-    def move_job_down(index):
-        if index < len(jobs) - 1:
-            jobs.insert(index + 1, jobs.pop(index))
-            save_jobs(jobs_queue_file, jobs)
-            update_job_listbox()
-
-    def move_job_to_top(index):
-        if index > 0:
-            jobs.insert(0, jobs.pop(index))
-            save_jobs(jobs_queue_file, jobs)
-            update_job_listbox()
-
-    def move_job_to_bottom(index):
-        if index < len(jobs) - 1:
-            jobs.append(jobs.pop(index))
-            save_jobs(jobs_queue_file, jobs)
-            update_job_listbox()
-
-    def edit_job_arguments_text(job):
-        global default_values
-        job_args = job.get('job_args', '')
-        preprocessed_defaults = preprocess_execution_providers(default_values)
-        edit_arg_window = tk.Toplevel()
-        edit_arg_window.title("Edit Job Arguments")
-        edit_arg_window.geometry("1050x500")
-        canvas = tk.Canvas(edit_arg_window)
-        scrollable_frame = tk.Frame(canvas)
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.pack(side="left", fill="both", expand=True)
-        entries = {}
-        checkboxes = {}
-        row = 0
-        col = 0
-        args_pattern = r'(--[\w-]+)\s+((?:.(?! --))+.)'
-        iter_args = re.finditer(args_pattern, job_args)
-        job_args_dict = {}
-        for match in iter_args:
-            arg, value = match.groups()
-            value = ' '.join(value.split())  # Normalize spaces
-            job_args_dict[arg] = value
-        skip_keys = ['--source-paths', '--target-path', '--output-path', '--ui-layouts']
-        for arg, default_value in default_values.items():
-            cli_arg = '--' + arg.replace('_', '-')
-            if cli_arg in skip_keys:
-                continue  # Skip the creation of GUI elements for these keys
-
-            formatted_default_value = format_cli_value(default_value)
-            current_value = job_args_dict.get(cli_arg, formatted_default_value)
-            is_checked = cli_arg in job_args_dict
-            
-            var = tk.BooleanVar(value=is_checked)
-            chk = tk.Checkbutton(scrollable_frame, text=cli_arg, variable=var)
-            chk.grid(row=row, column=col*3, padx=5, pady=2, sticky="w")
-
-            entry = tk.Entry(scrollable_frame)
-            entry.insert(0, str(current_value if current_value else default_value))
-            entry.grid(row=row, column=col*3+1, padx=5, pady=2, sticky="w")
-            entry.config(state='normal' if is_checked else 'disabled')
-
-            entries[cli_arg] = entry
-            checkboxes[cli_arg] = var
-
-            var.trace_add("write", lambda *args, var=var, entry=entry, value=current_value: update_entry(var, entry, value))
-            row += 1
-            if row >= 16:
-                row = 0
-                col += 1
-
-        def update_entry(var, entry, value):
-            if var.get():
-                entry.config(state=tk.NORMAL)
-                entry.delete(0, tk.END)
-                entry.insert(0, value)
-            else:
-                entry.config(state=tk.DISABLED)
-                entry.delete(0, tk.END)
-
-        def save_changes():
-            new_job_args = []
-            for arg, var in checkboxes.items():
-                if var.get():
-                    entry_text = entries[arg].get().strip()
-                    if entry_text:
-                        new_job_args.append(f"{arg} {entry_text}")
-
-            job['job_args'] = ' '.join(new_job_args)
-            debug_print("Updated Job Args:", job['job_args'])
-            save_jobs(jobs_queue_file, jobs)
-            edit_arg_window.destroy()
-
-        ok_button = tk.Button(edit_arg_window, text="OK", command=save_changes)
-        ok_button.pack(pady=5, padx=5, side=tk.RIGHT)
-
-        cancel_button = tk.Button(edit_arg_window, text="Cancel", command=edit_arg_window.destroy)
-        cancel_button.pack(pady=5, padx=5, side=tk.RIGHT)
-
-        scrollable_frame.update_idletasks()
-        canvas.configure(scrollregion=canvas.bbox("all"))
-        edit_arg_window.mainloop()
-
-    def batch_job(job):
-        target_filetype = None
-        source_or_target = None
-        if isinstance(job['sourcecache'], str):
-            job['sourcecache'] = [job['sourcecache']]
-        current_extension = job['targetcache'].lower().rsplit('.', 1)[-1]
-        if current_extension in ['jpg', 'jpeg', 'png']:
-            target_filetype = 'Image'
-        elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
-            target_filetype = 'Video'
-
-        def on_use_source():
-            nonlocal source_or_target
-            source_or_target = 'target'
+    def on_use_target():
+        nonlocal source_or_target
+        source_or_target = 'source'
+        if any(ext in src.lower() for ext in ['.mp3', '.wav', '.aac'] for src in job['sourcecache']):
+            messagebox.showinfo("BatchItUp Error", "Sorry, BatchItUp cannot clone lipsync jobs yet.")
             dialog.destroy()
-            open_file_dialog()
+            return
 
-        def on_use_target():
-            nonlocal source_or_target
-            source_or_target = 'source'
-            if any(ext in src.lower() for ext in ['.mp3', '.wav', '.aac'] for src in job['sourcecache']):
-                messagebox.showinfo("BatchItUp Error", "Sorry, BatchItUp cannot clone lipsync jobs yet.")
+        if len(job['sourcecache']) > 1:
+            source_filenames = [os.path.basename(src) for src in job['sourcecache']]
+            proceed = messagebox.askyesno(
+                "BatchItUp Multiple Faces",
+                f"Your current source contains multiple faces ({', '.join(source_filenames)}). BatchItUp cannot create multiple target {target_filetype} jobs while still maintaining multiple source faces. "
+                f"If you click 'Yes' to proceed, you will get 1 target {target_filetype} for each source face you select in the next file dialog, but you can use the edit queue window "
+                f"to add more source faces to each job created after BatchItUp has created them. Do you want to proceed?"
+            )
+            if not proceed:
                 dialog.destroy()
                 return
+        dialog.destroy()
+        open_file_dialog()
 
-            if len(job['sourcecache']) > 1:
-                source_filenames = [os.path.basename(src) for src in job['sourcecache']]
-                proceed = messagebox.askyesno(
-                    "BatchItUp Multiple Faces",
-                    f"Your current source contains multiple faces ({', '.join(source_filenames)}). BatchItUp cannot create multiple target {target_filetype} jobs while still maintaining multiple source faces. "
-                    f"If you click 'Yes' to proceed, you will get 1 target {target_filetype} for each source face you select in the next file dialog, but you can use the edit queue window "
-                    f"to add more source faces to each job created after BatchItUp has created them. Do you want to proceed?"
-                )
-                if not proceed:
-                    dialog.destroy()
-                    return
-            dialog.destroy()
-            open_file_dialog()
-
-        def open_file_dialog():
-            selected_paths = []
-            if source_or_target == 'source':
-                selected_paths = filedialog.askopenfilenames(
-                    title="Select Multiple targets for BatchItUp to make multiple cloned jobs using each File",
-                    filetypes=[('Image files', '*.jpg *.jpeg *.png')]
-                )
-            elif source_or_target == 'target':
-                file_types = [('Image files', '*.jpg *.jpeg *.png')] if target_filetype == 'Image' else [('Video files', '*.mp4 *.avi *.mov *.mkv')]
-                selected_paths = filedialog.askopenfilenames(
-                    title="Select Multiple sources for BatchItUp to make multiple cloned jobs using each File",
-                    filetypes=file_types
-                )
-            if selected_paths:
-                for path in selected_paths:
-                    add_new_job = job.copy()  # Copy the existing job to preserve other attributes
-                    path = copy_to_media_cache(path)
-                    add_new_job[source_or_target + 'cache'] = path
-                    debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
-                    jobs.append(add_new_job)
-                save_jobs(jobs_queue_file, jobs)
-                update_job_listbox()
-
-        dialog = tk.Toplevel()
-        dialog.withdraw()
-
-        source_filenames = [os.path.basename(src) for src in job['sourcecache']]
-        message = (
-            f"Welcome to the BatchItUp feature. Here you can add multiple batch jobs with just a few clicks.\n\n"
-            f"Click the 'Use Source' button to select as many target {target_filetype}s as you like and BatchItUp will create a job for each {target_filetype} "
-            f"using {', '.join(source_filenames)} as the source image(s), OR you can Click 'Use Target' to select as many Source Images as you like and BatchItUp will "
-            f"create a job for each source image using {os.path.basename(job['targetcache'])} as the target {target_filetype}."
-        )
-
-        dialog.deiconify()
-        dialog.geometry("500x300")
-        dialog.title("BatchItUp")
-
-        label = tk.Label(dialog, text=message, wraplength=450, justify="left")
-        label.pack(pady=20)
-
-        button_frame = tk.Frame(dialog)
-        button_frame.pack(pady=10)
-
-        use_source_button = tk.Button(button_frame, text="Use Source", command=on_use_source)
-        use_source_button.pack(side="left", padx=10)
-
-        use_target_button = tk.Button(button_frame, text="Use Target", command=on_use_target)
-        use_target_button.pack(side="left", padx=10)
-
-        dialog.mainloop()
-
-    def select_job_file(parent, job, source_or_target):
-        file_types = []
+    def open_file_dialog():
+        selected_paths = []
         if source_or_target == 'source':
-            file_types = [('source files', '*.jpg *.jpeg *.png *.mp3 *.wav *.aac')]
+            selected_paths = filedialog.askopenfilenames(
+                title="Select Multiple targets for BatchItUp to make multiple cloned jobs using each File",
+                filetypes=[('Image files', '*.jpg *.jpeg *.png')]
+            )
         elif source_or_target == 'target':
-            current_extension = job['targetcache'].lower().rsplit('.', 1)[-1]
-            if current_extension in ['jpg', 'jpeg', 'png']:
-                file_types = [('Image files', '*.jpg *.jpeg *.png')]
-            elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
-                file_types = [('Video files', '*.mp4 *.avi *.mov *.mkv')]
-
-        if source_or_target == 'source':
-            selected_paths = filedialog.askopenfilenames(title=f"Select {source_or_target.capitalize()} File(s)", filetypes=file_types)
-        else:
-            selected_path = filedialog.askopenfilename(title=f"Select {source_or_target.capitalize()} File", filetypes=file_types)
-            selected_paths = [selected_path] if selected_path else []
-
+            file_types = [('Image files', '*.jpg *.jpeg *.png')] if target_filetype == 'Image' else [('Video files', '*.mp4 *.avi *.mov *.mkv')]
+            selected_paths = filedialog.askopenfilenames(
+                title="Select Multiple sources for BatchItUp to make multiple cloned jobs using each File",
+                filetypes=file_types
+            )
         if selected_paths:
-            check_if_needed(job, source_or_target)
-            update_paths(job, selected_paths, source_or_target)
-            if isinstance(job['sourcecache'], list):
-                source_cache_exists = all(os.path.exists(cache) for cache in job['sourcecache'])
-            else:
-                source_cache_exists = os.path.exists(job['sourcecache'])
-            
-            if source_cache_exists and os.path.exists(job['targetcache']):
-                job['status'] = 'pending'
-            else:
-                job['status'] = 'missing'
-
+            jobs = load_jobs(jobs_queue_file)
+            original_index = jobs.index(job)  # Find the index of the original job        
+            for path in selected_paths:
+                add_new_job = job.copy()  # Copy the existing job to preserve other attributes
+                add_new_job['id'] = str(uuid.uuid4())
+                path = copy_to_media_cache(path)
+                add_new_job[source_or_target + 'cache'] = path
+                debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
+                original_index += 1  # Increment the index for each new job
+                jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
             save_jobs(jobs_queue_file, jobs)
-            update_job_listbox()
-            
-    def create_job_thumbnail(parent, job, source_or_target):
-        job_id = job['id']
+            refresh_frame_listbox()
+    dialog = tk.Toplevel()
+    dialog.withdraw()
 
-        # Clear the existing image reference for this specific job to force update
-        if job_id in image_references:
-            del image_references[job_id]
+    source_filenames = [os.path.basename(src) for src in job['sourcecache']]
+    message = (
+        f"Welcome to the BatchItUp feature. Here you can add multiple batch jobs with just a few clicks.\n\n"
+        f"Click the 'Use Source' button to select as many target {target_filetype}s as you like and BatchItUp will create a job for each {target_filetype} "
+        f"using {', '.join(source_filenames)} as the source image(s), OR you can Click 'Use Target' to select as many Source Images as you like and BatchItUp will "
+        f"create a job for each source image using {os.path.basename(job['targetcache'])} as the target {target_filetype}."
+    )
 
-        file_paths = job[source_or_target + 'cache']
-        file_paths = file_paths if isinstance(file_paths, list) else [file_paths]
+    dialog.deiconify()
+    dialog.geometry("500x300")
+    dialog.title("BatchItUp")
 
-        for file_path in file_paths:
-            if not os.path.exists(file_path):
-                button = Button(parent, text=f"File not found:\n\n {os.path.basename(file_path)}\nClick to update", bg='white', fg='black', command=lambda: select_job_file(parent, job, source_or_target))
-                button.pack(pady=2, fill='x', expand=False)
-                return button
+    label = tk.Label(dialog, text=message, wraplength=450, justify="left")
+    label.pack(pady=20)
 
-        if not os.path.exists(thumbnail_dir):
-            os.makedirs(thumbnail_dir)
+    button_frame = tk.Frame(dialog)
+    button_frame.pack(pady=10)
 
-        num_images = len(file_paths)
-        grid_size = math.ceil(math.sqrt(num_images))
-        thumb_size = 200 // grid_size
+    use_source_button = tk.Button(button_frame, text="Use Source", command=on_use_source)
+    use_source_button.pack(side="left", padx=10)
 
-        thumbnail_files = []
-        for idx, file_path in enumerate(file_paths):
-            thumbnail_path = os.path.join(thumbnail_dir, f"{source_or_target}_thumb_{job_id}_{idx}.png")
-            if file_path.lower().endswith(('.mp3', '.wav', '.aac', '.flac')):
-                audio_icon_path = os.path.join(working_dir, 'audioicon.png')
-                cmd = [
-                    'ffmpeg', '-i', audio_icon_path,
-                    '-vf', f'scale={thumb_size}:{thumb_size}',
-                    '-vframes', '1',
-                    '-y', thumbnail_path
-                ]
-            else:
-                cmd = [
-                    'ffmpeg', '-i', file_path,
-                    '-vf', f'scale={thumb_size}:{thumb_size}',
-                    '-vframes', '1',
-                    '-y', thumbnail_path
-                ]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            thumbnail_files.append(thumbnail_path)
+    use_target_button = tk.Button(button_frame, text="Use Target", command=on_use_target)
+    use_target_button.pack(side="left", padx=10)
 
-        list_file_path = os.path.join(thumbnail_dir, f'{job_id}_input_list.txt')
-        with open(list_file_path, 'w') as file:
-            for thumb in thumbnail_files:
-                file.write(f"file '{thumb}'\n")
+    dialog.mainloop()
+ 
 
-        grid_path = os.path.join(thumbnail_dir, f"{source_or_target}_grid_{job_id}.png")
-        grid_cmd = [
-            'ffmpeg',
-            '-loglevel', 'error',
-            '-f', 'concat', '-safe', '0', '-i', list_file_path,
-            '-filter_complex', f'tile={grid_size}x{grid_size}:padding=2',
-            '-y', grid_path
-        ]
-        grid_result = subprocess.run(grid_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if grid_result.returncode != 0:
-            print(f"Error creating grid: {grid_result.stderr.decode()}")
-            return None
-        try:
-            with open(grid_path, 'rb') as f:
-                grid_image_data = BytesIO(f.read())
-            grid_photo_image = PhotoImage(data=grid_image_data.read())
-            button = Button(parent, image=grid_photo_image, command=lambda ft=source_or_target: select_job_file(parent, job, ft))
-            button.image = grid_photo_image
-            button.pack(side='left', padx=5)
-            image_references[job_id] = button
-        except Exception as e:
-            print(f"Failed to open grid image: {e}")
-        # Clean up thumbnail directory
-        for file in thumbnail_files:
-            if os.path.exists(file):
-                os.remove(file)
-        if os.path.exists(list_file_path):
-            os.remove(list_file_path)
-        if os.path.exists(grid_path):
-            os.remove(grid_path)
-        return button
+def update_job_listbox():
+    global frame, canvas, jobs, thumbnail_dir
+    update_counters()
+    custom_font = font.Font(family="Helvetica", size=12, weight="bold")
+    bold_font = font.Font(family="Helvetica", size=12, weight="bold")
 
-    def update_paths(job, path, source_or_target):
-        job_id = id(job)
-        if job_id in image_references:
-            del image_references[job_id]
-        if source_or_target == 'source':
-            cache_path = copy_to_media_cache(path)
-            if not isinstance(cache_path, list):
-                cache_path = [cache_path]
-            cache_key = 'sourcecache'
-            job[cache_key] = cache_path
-
-        if source_or_target == 'target':
-            cache_path = copy_to_media_cache(path)
-            cache_key = 'targetcache'
-            job[cache_key] = cache_path
-            copy_to_media_cache(path)
-            
-        if source_or_target == 'output':
-            cache_key = 'output_path'
-            cache_path = job['output_path']
-        job[cache_key] = cache_path
-        save_jobs(jobs_queue_file, jobs)
-        update_job_listbox()
-
-    def update_job_listbox():
-        global image_references, frame
-        update_counters()
-
-        try:
-            if frame.winfo_exists():
-                count_existing_jobs()
-                for widget in frame.winfo_children():
-                    widget.destroy()
-                for index, job in enumerate(jobs):
-                    source_cache_path = job['sourcecache'] if isinstance(job['sourcecache'], list) else [job['sourcecache']]
-                    source_thumb_exists = all(os.path.exists(os.path.normpath(source)) for source in source_cache_path)
-                    target_cache_path = job['targetcache'] if isinstance(job['targetcache'], str) else job['targetcache'][0]
-                    target_thumb_exists = os.path.exists(os.path.normpath(target_cache_path))
+    try:
+        if frame.winfo_exists():
+            jobs = load_jobs(jobs_queue_file)
+            count_existing_jobs()
+            for widget in frame.winfo_children():
+                widget.destroy()
+            for index, job in enumerate(jobs):
+                source_cache_path = job['sourcecache'] if isinstance(job['sourcecache'], list) else [job['sourcecache']]
+                source_mediacache_exists = all(os.path.exists(os.path.normpath(source)) for source in source_cache_path)
+                target_cache_path = job['targetcache'] if isinstance(job['targetcache'], str) else job['targetcache'][0]
+                target_mediacache_exists = os.path.exists(os.path.normpath(target_cache_path))
+                bg_color = 'SystemButtonFace'
+                if job['status'] == 'failed':
+                    bg_color = 'red'
+                if job['status'] == 'executing':
+                    bg_color = 'black'
+                if job['status'] == 'completed':
+                    bg_color = 'grey'
+                if job['status'] == 'editing':
+                    bg_color = 'green'
+                if job['status'] == 'pending':
                     bg_color = 'SystemButtonFace'
-                    if job['status'] == 'failed':
+                if not job['status'] == 'compleated':
+                    job_id = job['id']
+                    if not source_mediacache_exists:
+                        debug_print(f"source mediacache {source_cache_path} is missing ")
+                        job['status'] = 'missing'
+                        remove_old_grid(job_id, 'source')
                         bg_color = 'red'
-                    if job['status'] == 'executing':
-                        bg_color = 'black'
-                    if job['status'] == 'completed':
-                        bg_color = 'grey'
-                    if job['status'] == 'editing':
-                        bg_color = 'green'
-                    if job['status'] == 'pending':
-                        bg_color = 'SystemButtonFace'
-                    if not source_thumb_exists or not target_thumb_exists:
+                    if not target_mediacache_exists:
+                        debug_print(f"target mediacache {target_cache_path} is missing ")
+                        job['status'] = 'missing'
+                        remove_old_grid(job_id, 'target')
                         bg_color = 'red'
-                    if job['status'] == 'archived':
-                        bg_color = 'brown'
-                    job_frame = tk.Frame(frame, borderwidth=2, relief='groove', background=bg_color)
-                    job_frame.pack(fill='x', expand=True, padx=5, pady=5)
-                    move_job_frame = tk.Frame(job_frame)
-                    move_job_frame.pack(side='left', fill='x', padx=5)
-                    move_top_button = tk.Button(move_job_frame, text="   Top   ", command=lambda idx=index: move_job_to_top(idx))
-                    move_top_button.pack(side='top', fill='y')
-                    move_up_button = tk.Button(move_job_frame, text="   Up   ", command=lambda idx=index: move_job_up(idx))
-                    move_up_button.pack(side='top', fill='y')
-                    move_down_button = tk.Button(move_job_frame, text=" Down ", command=lambda idx=index: move_job_down(idx))
-                    move_down_button.pack(side='top', fill='y')
-                    move_bottom_button = tk.Button(move_job_frame, text="Bottom", command=lambda idx=index: move_job_to_bottom(idx))
-                    move_bottom_button.pack(side='top', fill='y')
-                    
-                    source_frame = tk.Frame(job_frame)
-                    source_frame.pack(side='left', fill='x', padx=5)
-                    source_button = create_job_thumbnail(job_frame, job, source_or_target='source')
+                if job['status'] == 'archived':
+                    bg_color = 'brown'
+                job_frame = tk.Frame(frame, borderwidth=2, relief='groove', background=bg_color)
+                job_frame.pack(fill='x', expand=True, padx=5, pady=5)
+                move_job_frame = tk.Frame(job_frame)
+                move_job_frame.pack(side='left', fill='x', padx=5)
+                move_top_button = tk.Button(move_job_frame, text="   Top   ", command=lambda idx=index, j=job: move_job_to_top(idx))
+                move_top_button.pack(side='top', fill='y')
+                move_up_button = tk.Button(move_job_frame, text="   Up   ", command=lambda idx=index, j=job: move_job_up(idx))
+                move_up_button.pack(side='top', fill='y')
+                move_down_button = tk.Button(move_job_frame, text=" Down ", command=lambda idx=index, j=job: move_job_down(idx))
+                move_down_button.pack(side='top', fill='y')
+                move_bottom_button = tk.Button(move_job_frame, text="Bottom", command=lambda idx=index, j=job: move_job_to_bottom(idx))
+                move_bottom_button.pack(side='top', fill='y')
+
+                source_frame = tk.Frame(job_frame)
+                source_frame.pack(side='left', fill='x', padx=5)
+                job_id = job['id']
+                source_thumbnail_path = os.path.join(thumbnail_dir, f"source_grid_{job_id}.png")
+
+                if os.path.exists(source_thumbnail_path):
+                    source_photo_image = PhotoImage(file=source_thumbnail_path)
+                    source_button = Button(source_frame, image=source_photo_image, command=lambda ft='source', j=job: select_job_file(source_frame, j, ft))
+                    source_button.image = source_photo_image
+                    source_button.pack(side='left', padx=5)
+                else:
+                    source_button = create_job_thumbnail(source_frame, job, source_or_target='source')
                     if source_button:
                         source_button.pack(side='left', padx=5)
                     else:
-                        print("Failed to create source button.")
+                        debug_print("Failed to create source button.")
 
-                    action_frame = tk.Frame(job_frame)
-                    action_frame.pack(side='left', fill='x', padx=5)
+                action_frame = tk.Frame(job_frame)
+                action_frame.pack(side='left', fill='x', padx=5)
 
-                    arrow_label = tk.Label(action_frame, text=f"{job['status']}\n\u27A1", font=bold_font)
-                    arrow_label.pack(side='top', padx=5)
+                arrow_label = tk.Label(action_frame, text=f"{job['status']}\n\u27A1", font=bold_font)
+                if job['status'] != 'pending':
+                    arrow_label.bind("<Button-1>", lambda event, j=job: make_job_pending(j))
+                arrow_label.pack(side='top', padx=5)
 
-                    output_path_button = tk.Button(action_frame, text="Output Path", command=lambda j=job: output_path_job(j))
-                    output_path_button.pack(side='top', padx=2)
-                    
-                    delete_button = tk.Button(action_frame, text=" Delete ", command=lambda j=job: delete_job(j))
-                    delete_button.pack(side='top', padx=2)
-                    
-                    archive_button = tk.Button(action_frame, text="Archive", command=lambda j=job: archive_job(j))
-                    archive_button.pack(side='top', padx=2)
-                    
-                    batch_button = tk.Button(action_frame, text="BatchItUp", command=lambda j=job: batch_job(j))
-                    batch_button.pack(side='top', padx=2)
-                    
-                    target_frame = tk.Frame(job_frame)
-                    target_frame.pack(side='left', fill='x', padx=5)
-                    target_button = create_job_thumbnail(job_frame, job, source_or_target='target')
+                output_path_button = tk.Button(action_frame, text="Output Path", command=lambda j=job: output_path_job(j))
+                output_path_button.pack(side='top', padx=2)
+
+                delete_button = tk.Button(action_frame, text=" Delete ", command=lambda j=job: delete_job(j))
+                delete_button.pack(side='top', padx=2)
+
+                button_text = "Un-Archive" if job['status'] == "archived" else "Archive"
+                archive_button = tk.Button(action_frame, text=button_text, command=lambda j=job: archive_job(j))
+                archive_button.pack(side='top', padx=2)
+
+                clone_job_button = tk.Button(action_frame, text="Clone Job", command=lambda j=job: clone_job(j))
+                clone_job_button.pack(side='top', padx=2)
+
+                batch_button = tk.Button(action_frame, text="BatchItUp", command=lambda j=job: batch_job(j))
+                batch_button.pack(side='top', padx=2)
+
+                target_frame = tk.Frame(job_frame)
+                target_frame.pack(side='left', fill='x', padx=5)
+
+                target_thumbnail_path = os.path.join(thumbnail_dir, f"target_grid_{job_id}.png")
+                if os.path.exists(target_thumbnail_path):
+                    target_photo_image = PhotoImage(file=target_thumbnail_path)
+                    target_button = Button(target_frame, image=target_photo_image, command=lambda ft='target', j=job: select_job_file(target_frame, j, ft))
+                    target_button.image = target_photo_image
+                    target_button.pack(side='left', padx=5)
+                else:
+                    target_button = create_job_thumbnail(target_frame, job, source_or_target='target')
                     if target_button:
                         target_button.pack(side='left', padx=5)
                     else:
-                        print("Failed to create target button.")
-                    argument_frame = tk.Frame(job_frame)
-                    argument_frame.pack(side='left', fill='x', padx=5)
-                    if not automatic1111:
-                        facefusion_button = tk.Button(argument_frame, text="UN-Queue It Up", font=bold_font, justify='center')
-                        facefusion_button.pack(side='top', padx=5, fill='x', expand=False)
-                        facefusion_button.bind("<Button-1>", lambda event, j=job: reload_job_in_facefusion_edit(j))
-                    argument_button = tk.Button(argument_frame, text="EDIT JOB ARGUMENTS", wraplength=325, justify='center')
-                    argument_button.pack(side='bottom', padx=5, fill='x', expand=False)
-                    argument_button.bind("<Button-1>", lambda event, j=job: edit_job_arguments_text(j))
-                frame.update_idletasks()
-                canvas.config(scrollregion=canvas.bbox("all"))
-        except tk.TclError as e:
-            pass
-            
-    edit_queue.refresh_frame_listbox = refresh_frame_listbox
-    edit_queue_window += 1
-    root.after(1000, refresh_frame_listbox)
-    root.mainloop()
-    edit_queue_window = 0
-    if __name__ == '__main__':
-        edit_queue()
-    PENDING_JOBS_COUNT = count_existing_jobs()
-    print_existing_jobs()
-    return STATUS_WINDOW.value
+                        debug_print("Failed to create target button.")
 
-### testing internal method
+                argument_frame = tk.Frame(job_frame)
+                argument_frame.pack(side='left', fill='x', padx=5)
 
-def test_job_args(job):
+                argument_button = tk.Button(argument_frame, text="EDIT JOB ARGUMENTS", wraplength=325, justify='center')
+                argument_button.pack(side='bottom', padx=5, fill='x', expand=False)
+                argument_button.bind("<Button-1>", lambda event, j=job: edit_job_arguments_text(j))
 
-    # Check and consolidate source paths
-    if isinstance(job['sourcecache'], list):
-        arg_source_paths = [arg for p in job['sourcecache'] for arg in ['-s', p]]
-    else:
-        arg_source_paths = ['-s', job["sourcecache"]]
+        frame.update_idletasks()
+        canvas.config(scrollregion=canvas.bbox("all"))
+
+    except tk.TclError as e:
+        debug_print(e)
+
+def refresh_buttonclick():
+    count_existing_jobs()
+    save_jobs(jobs_queue_file, jobs)
+    refresh_frame_listbox()
+
+def refresh_frame_listbox():
+    global jobs
+    status_priority = {'editing': 0, 'executing': 1, 'pending': 2, 'failed': 3, 'missing': 4, 'completed': 5, 'archived': 6}
+    jobs = load_jobs(jobs_queue_file)
+    jobs.sort(key=lambda x: status_priority.get(x['status'], 6))
+    save_jobs(jobs_queue_file, jobs)
+    update_job_listbox()
+
+def close_window():
+    save_jobs(jobs_queue_file, jobs)
+    edit_queue_windowstatus = 0
+    root.destroy
+
+def make_job_pending(job):
+    job['status'] = 'pending'
+    save_jobs(jobs_queue_file, jobs) 
+    refresh_frame_listbox()
     
-    # Target and output paths
-    arg_target_path = ['-t', job["targetcache"]]
-    arg_output_path = ['-o', job["output_path"]]
-    arg_headless = [job["headless"]] 
-    # Split job_args if it's a string
-    job_args = job['job_args'].split() if isinstance(job['job_args'], str) else job['job_args']
+def jobs_to_delete(jobstatus):
+    global jobs
+    jobs = load_jobs(jobs_queue_file)
+    for job in jobs:
+        if job['status'] == jobstatus:
+            job_id = job['id']
+            remove_old_grid(job_id, source_or_target = 'source')
+            remove_old_grid(job_id, source_or_target = 'target')
+    jobs = [job for job in jobs if job['status'] != jobstatus]
+    save_jobs(jobs_queue_file, jobs)
+    if edit_queue_windowstatus > 0:
+        refresh_frame_listbox()
+    
+def remove_old_grid(job_id, source_or_target):
+    image_ref_key = f"{source_or_target}_grid_{job_id}.png"
+    grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
+    if os.path.exists(grid_thumb_path):
+        os.remove(grid_thumb_path)
+        debug_print(f"Deleted Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")  
+    
+def archive_job(job):
+    if job['status'] == 'archived':
+        job['status'] = 'pending'
+    else:
+        job['status'] = 'archived'
+    save_jobs(jobs_queue_file, jobs) 
+    refresh_frame_listbox()
 
-    # Combine all arguments into a single list
-    combined_args = arg_source_paths + arg_target_path + arg_output_path + arg_headless + job_args
+def reload_job_in_facefusion_edit(job):
+    sourcecache_path = job.get('sourcecache')
+    targetcache_path = job.get('targetcache')
 
-    # Print debug statement to verify combined_args
-    debug_print("combined_args:", combined_args)
+    if isinstance(sourcecache_path, list):
+        missing_files = [path for path in sourcecache_path if not os.path.exists(path)]
+        if missing_files:
+            messagebox.showerror("Error", f"Cannot edit job. The following source files do not exist: {', '.join(os.path.basename(path) for path in missing_files)}")
+            return
+    else:
+        if not os.path.exists(sourcecache_path):
+            messagebox.showerror("Error", f"Cannot edit job. The source file '{os.path.basename(sourcecache_path)}' does not exist.")
+            return
 
-    # Save the original sys.argv
-    original_argv = sys.argv
+    if not os.path.exists(targetcache_path):
+        messagebox.showerror("Error", f"Cannot edit job. The target file '{os.path.basename(targetcache_path)}' does not exist.")
+        return
 
-    # Modify sys.argv to include only the new arguments
-    sys.argv = ['run2.py'] + combined_args
-    core2.cli()
-    sys.argv = original_argv
+    response = messagebox.askyesno("Confirm Edit", "THIS WILL REMOVE THIS PENDING JOB FROM THE QUEUE, AND LOAD IT INTO FACEFUSION WEBUI FOR EDITING, WHEN DONE EDITING CLICK START TO RUN IT OR ADD JOB TO REQUEUE IT. ARE YOU SURE YOU WANT TO EDIT THIS JOB", icon='warning')
+    if not response:
+        return
+    job['headless'] = ''
+    job['status'] = 'editing'
+    save_jobs(jobs_queue_file, jobs)
+    top = Toplevel()
+    top.title("Please Wait")
+    message_label = tk.Label(top, text="Please wait while the job loads back into FaceFusion...", padx=20, pady=20)
+    message_label.pack()
+    top.after(1000, close_window)
+    top.after(2000, top.destroy)
+    custom_print(f"{GREEN} PLEASE WAIT WHILE THE Jobs IS RELOADED IN FACEFUSION{ENDC}...... {YELLOW}THIS WILL CREATE AN ADDITIONAL PYTHON PROCESS AND YOU SHOULD CONSIDER RESTARTING FACEFUSION AFTER DOING THIS MOR THEN 3 TIMES{ENDC}")
+    root.destroy()
+    #edit_job_args(job)       
+    run_job_args(job)
+
+def output_path_job(job):
+    selected_path = filedialog.askdirectory(title="Select A New Output Path for this Job")
+
+    if selected_path:
+        formatted_path = selected_path.replace('/', '\\')  
+        job['output_path'] = formatted_path
+        update_paths(job, formatted_path, 'output')
+    save_jobs(jobs_queue_file, jobs)  
+
+def delete_job(job):
+    job['status'] = ('deleting')
+    job_id = job['id']
+    check_if_needed(job, 'both')
+    jobs.remove(job)
+    save_jobs(jobs_queue_file, jobs)
+    remove_old_grid(job_id, source_or_target = 'source')
+    remove_old_grid(job_id, source_or_target = 'target')
+    refresh_frame_listbox()
+
+
+def move_job_up(index):
+    if index > 0:
+        jobs.insert(index - 1, jobs.pop(index))
+        save_jobs(jobs_queue_file, jobs)
+        update_job_listbox()
+
+def move_job_down(index):
+    if index < len(jobs) - 1:
+        jobs.insert(index + 1, jobs.pop(index))
+        save_jobs(jobs_queue_file, jobs)
+        update_job_listbox()
+
+def move_job_to_top(index):
+    if index > 0:
+        jobs.insert(0, jobs.pop(index))
+        save_jobs(jobs_queue_file, jobs)
+        update_job_listbox()
+
+def move_job_to_bottom(index):
+    if index < len(jobs) - 1:
+        jobs.append(jobs.pop(index))
+        save_jobs(jobs_queue_file, jobs)
+        update_job_listbox()
+
+def edit_job_arguments_text(job):
+    global default_values
+    job_args = job.get('job_args', '')
+    edit_arg_window = tk.Toplevel()
+    edit_arg_window.title("Edit Job Arguments   - tip greyed out values are defaults and will be used if needed, uncheck any argument to restore it to the default value")
+    edit_arg_window.geometry("1050x500")
+    canvas = tk.Canvas(edit_arg_window)
+    scrollable_frame = tk.Frame(canvas)
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.pack(side="left", fill="both", expand=True)
+    entries = {}
+    checkboxes = {}
+    row = 0
+    col = 0
+    args_pattern = r'(--[\w-]+)\s+((?:.(?! --))+.)'
+    iter_args = re.finditer(args_pattern, job_args)
+    job_args_dict = {}
+    for match in iter_args:
+        arg, value = match.groups()
+        value = ' '.join(value.split())  # Normalize spaces
+        job_args_dict[arg] = value
+    skip_keys = ['--source-paths', '--target-path', '--output-path', '--face-recognizer-model', '--ui-layouts']
+    for arg, default_value in default_values.items():
+        cli_arg = '--' + arg.replace('_', '-')
+        if cli_arg in skip_keys:
+            continue  # Skip the creation of GUI elements for these keys
+
+        formatted_default_value = format_cli_value(default_value)
+        current_value = job_args_dict.get(cli_arg, formatted_default_value)
+        is_checked = cli_arg in job_args_dict
         
+        var = tk.BooleanVar(value=is_checked)
+        chk = tk.Checkbutton(scrollable_frame, text=cli_arg, variable=var)
+        chk.grid(row=row, column=col*3, padx=5, pady=2, sticky="w")
+
+        entry = tk.Entry(scrollable_frame)
+        entry.insert(0, str(current_value if current_value else default_value))
+        entry.grid(row=row, column=col*3+1, padx=5, pady=2, sticky="w")
+        entry.config(state='normal' if is_checked else 'disabled')
+
+        entries[cli_arg] = entry
+        checkboxes[cli_arg] = var
+
+        var.trace_add("write", lambda *args, var=var, entry=entry, value=current_value: update_entry(var, entry, value))
+        row += 1
+        if row >= 17:
+            row = 0
+            col += 1
+
+    def update_entry(var, entry, value):
+        if var.get():
+            entry.config(state=tk.NORMAL)
+            entry.delete(0, tk.END)
+            entry.insert(0, value)
+        else:
+            entry.config(state=tk.DISABLED)
+            entry.delete(0, tk.END)
+            
+                    
+    def save_changes():
+        new_job_args = []
+        for arg, var in checkboxes.items():
+            if var.get():
+                entry_text = entries[arg].get().strip()
+                if entry_text:
+                    new_job_args.append(f"{arg} {entry_text}")
+
+        job['job_args'] = ' '.join(new_job_args)
+        debug_print("Updated Job Args:", job['job_args'])
+
+        # Check for updated --frame-processors to update job['frame_processors']
+        if '--frame-processors' in job['job_args']:
+            job_args_list = job['job_args'].split()
+            try:
+                fp_index = job_args_list.index('--frame-processors')
+                new_frame_processors_args = []
+                for arg in job_args_list[fp_index + 1:]:
+                    if arg.startswith('--'):
+                        break
+                    new_frame_processors_args.append(arg)
+                job['frame_processors'] = ' '.join(new_frame_processors_args)
+            except ValueError:
+                pass
+        save_jobs(jobs_queue_file, jobs)
+        edit_arg_window.destroy()
+
+    ok_button = tk.Button(edit_arg_window, text="OK", command=save_changes)
+    ok_button.pack(pady=5, padx=5, side=tk.RIGHT)
+
+    cancel_button = tk.Button(edit_arg_window, text="Cancel", command=edit_arg_window.destroy)
+    cancel_button.pack(pady=5, padx=5, side=tk.RIGHT)
+
+    scrollable_frame.update_idletasks()
+    canvas.configure(scrollregion=canvas.bbox("all"))
+    edit_arg_window.mainloop()
+    
+    
+def select_job_file(parent, job, source_or_target):
+    job_id = job['id']
+    file_types = []
+    if source_or_target == 'source':
+        file_types = [('source files', '*.jpg *.jpeg *.png *.mp3 *.wav *.aac')]
+    elif source_or_target == 'target':
+        current_extension = job['targetcache'].lower().rsplit('.', 1)[-1]
+        if current_extension in ['jpg', 'jpeg', 'png']:
+            file_types = [('Image files', '*.jpg *.jpeg *.png')]
+        elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
+            file_types = [('Video files', '*.mp4 *.avi *.mov *.mkv')]
+
+    if source_or_target == 'source':
+        selected_paths = filedialog.askopenfilenames(title=f"Select {source_or_target.capitalize()} File(s)", filetypes=file_types)
+    else:
+        selected_path = filedialog.askopenfilename(title=f"Select {source_or_target.capitalize()} File", filetypes=file_types)
+        selected_paths = [selected_path] if selected_path else []
+
+    if selected_paths:
+        remove_old_grid(job_id, source_or_target)
+        check_if_needed(job, source_or_target)
+        update_paths(job, selected_paths, source_or_target)
         
+        if isinstance(job['sourcecache'], list):
+            source_cache_exists = all(os.path.exists(cache) for cache in job['sourcecache'])
+        else:
+            source_cache_exists = os.path.exists(job['sourcecache'])
+        
+        if source_cache_exists and os.path.exists(job['targetcache']):
+            job['status'] = 'pending'
+        else:
+            job['status'] = 'missing'
+
+        save_jobs(jobs_queue_file, jobs)
+        update_job_listbox()
+
+def create_job_thumbnail(parent, job, source_or_target):
+    job_id = job['id']
+    image_ref_key = f"{source_or_target}_grid_{job_id}.png"
+    grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
+    if not os.path.exists(thumbnail_dir):
+        os.makedirs(thumbnail_dir)
+        debug_print(f"Created thumbnail directory: {thumbnail_dir}")
+
+    file_paths = job[source_or_target + 'cache']
+    file_paths = file_paths if isinstance(file_paths, list) else [file_paths]
+
+    for file_path in file_paths:
+        if not os.path.exists(file_path):
+            debug_print(f"File not found: {file_path}")
+            button = Button(parent, text=f"File not found:\n\n {os.path.basename(file_path)}\nClick to update", bg='white', fg='black', command=lambda j=job: select_job_file(parent, j, source_or_target))
+            button.pack(pady=2, fill='x', expand=False)
+            return button
+
+        if os.path.exists(grid_thumb_path):
+            button = Button(parent, image=PhotoImage(file=grid_thumb_path), command=lambda ft=source_or_target, j=job: select_job_file(parent, j, ft))
+            button.image = PhotoImage(file=grid_thumb_path)
+            return button
+
+    num_images = len(file_paths)
+    grid_size = math.ceil(math.sqrt(num_images))
+    thumb_size = 200 // grid_size
+
+    thumbnail_files = []
+    for idx, file_path in enumerate(file_paths):
+        thumbnail_path = os.path.join(thumbnail_dir, f"{source_or_target}_thumb_{job_id}_{idx}.png")
+        if file_path.lower().endswith(('.mp3', '.wav', '.aac', '.flac')):
+            audio_icon_path = os.path.join(working_dir, 'audioicon.png')
+            cmd = [
+                'ffmpeg', '-i', audio_icon_path,
+                '-vf', f'scale={thumb_size}:{thumb_size}',
+                '-vframes', '1',
+                '-y', thumbnail_path
+            ]
+        elif file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+            cmd = [
+                'ffmpeg', '-i', file_path,
+                '-vf', f'thumbnail,scale=\'if(gt(a,1),{thumb_size},-1)\':\'if(gt(a,1),-1,{thumb_size})\',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black',
+                '-vframes', '1',
+                '-y', thumbnail_path
+            ]
+        else:
+            probe_cmd = [
+                'ffmpeg', '-i', file_path,
+                '-show_entries', 'format=duration',
+                '-v', 'quiet', '-of', 'csv=p=0'
+            ]
+
+            result = subprocess.run(probe_cmd, capture_output=True, text=True)
+            try:
+                duration = float(result.stdout.strip())
+            except ValueError:
+                duration = 100
+            seek_time = duration * 0.10
+
+            cmd = [
+                'ffmpeg', '-ss', str(seek_time), '-i', file_path,
+                '-vf', f'thumbnail,scale=\'if(gt(a,1),{thumb_size},-1)\':\'if(gt(a,1),-1,{thumb_size})\',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black',
+                '-vframes', '1',
+                '-y', thumbnail_path
+            ]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        thumbnail_files.append(thumbnail_path)
+
+    list_file_path = os.path.join(thumbnail_dir, f'{job_id}_input_list.txt')
+    with open(list_file_path, 'w') as file:
+        for thumb in thumbnail_files:
+            file.write(f"file '{thumb}'\n")
+
+    grid_thumb_path = os.path.join(thumbnail_dir, f"{source_or_target}_grid_{job_id}.png")
+    grid_cmd = [
+        'ffmpeg',
+        '-loglevel', 'error',
+        '-f', 'concat', '-safe', '0', '-i', list_file_path,
+        '-filter_complex', f'tile={grid_size}x{grid_size}:padding=2',
+        '-y', grid_thumb_path
+    ]
+    grid_result = subprocess.run(grid_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if grid_result.returncode != 0:
+        debug_print(f"Error creating grid: {grid_result.stderr.decode()}")
+        return None
+    try:
+        grid_photo_image = PhotoImage(file=grid_thumb_path)
+        button = Button(parent, image=grid_photo_image, command=lambda ft=source_or_target, j=job: select_job_file(parent, j, ft))
+        button.image = grid_photo_image
+        button.pack(side='left', padx=5)
+        debug_print(f"Created Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")
+    except Exception as e:
+        debug_print(f"Failed to open grid image: {e}")
+
+    for file in thumbnail_files:
+        if os.path.exists(file):
+            os.remove(file)
+    if os.path.exists(list_file_path):
+        os.remove(list_file_path)
+    return button
+
+def update_paths(job, path, source_or_target):
+    
+    if source_or_target == 'source':
+        cache_path = copy_to_media_cache(path)
+        if not isinstance(cache_path, list):
+            cache_path = [cache_path]
+        cache_key = 'sourcecache'
+        job[cache_key] = cache_path
+
+    if source_or_target == 'target':
+        cache_path = copy_to_media_cache(path)
+        cache_key = 'targetcache'
+        job[cache_key] = cache_path
+        copy_to_media_cache(path)
+       
+    if source_or_target == 'output':
+        cache_key = 'output_path'
+        cache_path = job['output_path']
+    job[cache_key] = cache_path
+    save_jobs(jobs_queue_file, jobs)
+
 def run_job_args(current_run_job):
-
     if isinstance(current_run_job['sourcecache'], list):
         arg_source_paths = ' '.join(f'-s "{p}"' for p in current_run_job['sourcecache'])
     else:
@@ -972,6 +1063,7 @@ def run_job_args(current_run_job):
             bufsize=1  # Line-buffered
         )
     else:
+        #debug_print(f"python run.py {simulated_cmd}")
         process = subprocess.Popen(
             f"python run.py {simulated_cmd}",
             shell=True,
@@ -994,7 +1086,7 @@ def run_job_args(current_run_job):
                 lines.append(line)
                 label = f"{BLUE}Job# {CURRENT_JOB_NUMBER}{ENDC}"
                 if line.startswith("Processing:") or line.startswith("Analysing:"):
-                    print(f"\r{label} - {GREEN}{line.strip()[:100]}{ENDC}", end='', flush=True)
+                    print(f"\r{label}: {GREEN}{line.strip()[:100]}{ENDC}", end='', flush=True)
                     previous_line_was_progress = True
                 else:
                     if previous_line_was_progress:
@@ -1026,58 +1118,66 @@ def run_job_args(current_run_job):
         current_run_job['status'] = 'completed'
     else:
         current_run_job['status'] = 'failed'
-
+        with open(f"stderr - {current_run_job['id']}.txt", 'w') as f:
+            f.write(stderr)
     return current_run_job
-    ###return return_code
 
 
-def get_target_info(file_path):
-    # Get the file extension
+
+def get_target_info(file_path, current_run_job):
     current_extension = file_path.lower().rsplit('.', 1)[-1]
     target_filetype = None
-    file_info = ""
     
-    # Determine if the file is an image or video
     if current_extension in ['jpg', 'jpeg', 'png']:
         target_filetype = 'Image'
     elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
         target_filetype = 'Video'
-    
+    job_args = current_run_job.get('job_args')
+
     if target_filetype == 'Video':
-        # Get video properties
-        process = subprocess.Popen(
-            ['ffmpeg', '-i', file_path],
-            stderr=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            universal_newlines=True
-        )
-        stdout, stderr = process.communicate()
+        # Use ffprobe to get video dimensions, fps, and total frames
+        def get_video_info(file_path):
+            command = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
+                       'stream=width,height,r_frame_rate,nb_frames', '-of', 'default=noprint_wrappers=1', file_path]
+            process = subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
+            stdout, stderr = process.communicate()
+            video_info = dict(re.findall(r'(\w+)=([^\n]+)', stdout))
+            return video_info
         
-        duration = re.search(r'Duration: (\d+):(\d+):(\d+.\d+)', stderr)
-        height = re.search(r'Stream.*Video.* (\d+)x(\d+)', stderr)
-        fps = re.search(r'(\d+(\.\d+)?) fps', stderr)
-        bitrate = re.search(r'bitrate: (\d+(\.\d+)?) kb/s', stderr)
-        
-        if duration:
-            hours, minutes, seconds = map(float, duration.groups())
-            if hours > 0:
-                size_info = f"{int(hours)} hour{'s' if hours > 1 else ''} {int(minutes)} min{'s' if minutes > 1 else ''} long"
-            elif minutes > 0:
-                size_info = f"{int(minutes)} min{'s' if minutes > 1 else ''} {int(seconds)} sec{'s' if seconds > 1 else ''} long"
-            else:
-                size_info = f"{int(seconds)} second{'s' if seconds > 1 else ''} long"
+        video_info = get_video_info(file_path)
+        orig_dimensions = f"{video_info['width']}x{video_info['height']}"
+        orig_fps = eval(video_info['r_frame_rate'])  # Converts 'num/den' to float
+        orig_frames = int(video_info['nb_frames'])
+        total_seconds = orig_frames / orig_fps
+
+        # Fetch values from job_args if they exist
+        trim_frame_start_match = re.search(r'--trim-frame-start\s+(\d+)', job_args)
+        trim_frame_end_match = re.search(r'--trim-frame-end\s+(\d+)', job_args)
+        output_fps_match = re.search(r'--output-video-fps\s+(\d+)', job_args)
+        output_fps = int(output_fps_match.group(1)) if output_fps_match else orig_fps
+        output_dimensions_match = re.search(r'--output-video-resolution\s+(\d+x\d+)', job_args)
+        output_dimensions = output_dimensions_match.group(1) if output_dimensions_match else orig_dimensions
+
+
+        # Calculate output frames
+        output_frames = None
+        if trim_frame_start_match and trim_frame_end_match:
+            trim_frame_start = int(trim_frame_start_match.group(1))
+            trim_frame_end = int(trim_frame_end_match.group(1))
+            output_frames = trim_frame_end - trim_frame_start
+        elif trim_frame_start_match:
+            trim_frame_start = int(trim_frame_start_match.group(1))
+            output_frames = orig_frames - trim_frame_start
+        elif trim_frame_end_match:
+            trim_frame_end = int(trim_frame_end_match.group(1))
+            output_frames = trim_frame_end
         else:
-            size_info = "Unknown duration"
+            output_frames = orig_frames
         
-        if height and fps and bitrate:
-            width, height = height.groups()
-            fps = fps.group(1)
-            bitrate = bitrate.group(1)
-            encodeinfo = f"{width}x{height} pixels, {fps} fps, {bitrate} kb/s bitrate"
-            file_info = f"{size_info}, {encodeinfo}"
-        else:
-            file_info = size_info
-    
+        output_seconds = output_frames / output_fps
+        orig_video_length = get_vid_length(total_seconds)
+        output_video_length = get_vid_length(output_seconds)
+        
     elif target_filetype == 'Image':
         process = subprocess.Popen(
             ['ffmpeg', '-i', file_path],
@@ -1086,61 +1186,105 @@ def get_target_info(file_path):
             universal_newlines=True
         )
         stdout, stderr = process.communicate()
-        
-        dimensions = re.search(r'Stream.*Video.* (\d+)x(\d+)', stderr)
-        if dimensions:
-            width, height = dimensions.groups()
-            size_info = f"{width} wide x {height} high in pixels"
+        dimensions_match = re.search(r'Stream.*Video.* (\d+)x(\d+)', stderr)
+        if dimensions_match:
+            orig_dimensions = f"{dimensions_match.group(1)}x{dimensions_match.group(2)}"
         else:
-            size_info = "Unknown dimensions"
-        file_info = size_info
-    else:
-        file_info = "Unknown file type"
-    
-    return target_filetype, file_info
+            orig_dimensions = "Unknown dimensions"
+        output_dimensions_match = re.search(r'--output-image-resolution\s+(\d+x\d+)', job_args)
+        output_dimensions = output_dimensions_match.group(1) if output_dimensions_match else orig_dimensions
+        
+        orig_video_length = ""
+        output_video_length = ""
 
-# Example usage
-# Uncomment the line below to test with a specific file
-# print(get_target_size('path_to_your_video_or_image_file'))
-   
+    return target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions
+
+def get_vid_length(total_seconds):
+    if total_seconds is not None:
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        seconds = int(total_seconds % 60)  # Round to nearest whole number
+        
+        if hours > 0:
+            video_length = f"{hours} hour{'s' if hours > 1 else ''} {minutes} min{'s' if minutes > 1 else ''} long"
+        elif minutes > 0:
+            if seconds > 0:
+                video_length = f"{minutes} min{'s' if minutes > 1 else ''} {seconds} sec{'s' if seconds > 1 else ''} long"
+            else:
+                video_length = f"{minutes} min{'s' if minutes > 1 else ''} long"
+        else:
+            video_length = f"{seconds} second{'s' if seconds > 1 else ''} long"
+    else:
+        video_length = "Unknown duration"
+    return video_length
+
     
 def get_values_from_globals(state_name):
     state_dict = {}
-    
-    from facefusion.processors.frame import globals as frame_processors_globals###, choices as frame_processors_choices
+    frame_processors_choices_dict = {}
+    ff_choices_dict = {}
+    import facefusion.choices
+    from facefusion.processors.frame import globals as frame_processors_globals, choices as frame_processors_choices
+    from facefusion import choices as ff_choices
 
-    modules = [facefusion.globals, frame_processors_globals]  
+    imp_current_values = [facefusion.globals, frame_processors_globals]
+    other_choices = [frame_processors_choices, ff_choices]
 
-    for module in modules:
-        for attr in dir(module):
+    for imp_current_value in imp_current_values:
+        for attr in dir(imp_current_value):
             if not attr.startswith("__"):
-                value = getattr(module, attr)
+                value = getattr(imp_current_value, attr)
                 try:
                     json.dumps(value)  # Check if the value is JSON serializable
                     state_dict[attr] = value  # Store or update the value in the dictionary
                 except TypeError:
                     continue  # Skip values that are not JSON serializable
 
+    for other_choice in other_choices:
+        other_choice_dict = {}
+        for attr in dir(other_choice):
+            if not attr.startswith("__"):
+                value = getattr(other_choice, attr)
+                try:
+                    json.dumps(value)  # Check if the value is JSON serializable
+                    other_choice_dict[attr] = value  # Store or update the value in the dictionary
+                except TypeError:
+                    continue  # Skip values that are not JSON serializable
+        
+        if other_choice is frame_processors_choices:
+            frame_processors_choices_dict = other_choice_dict
+        elif other_choice is ff_choices:
+            ff_choices_dict = other_choice_dict
+
     state_dict = preprocess_execution_providers(state_dict)
+    
     if debugging:
         with open(os.path.join(working_dir, f"{state_name}.txt"), "w") as file:
             for key, val in state_dict.items():
                 file.write(f"{key}: {val}\n")
         debug_print(f"{state_name}.txt created")
-    return state_dict
+        
+    if debugging:
+        choice_dicts = {
+            "frame_processors_choices_values.txt": frame_processors_choices_dict,
+            "ff_choices_values.txt": ff_choices_dict
+        }
+        
+        for filename, choice_dict in choice_dicts.items():
+            with open(os.path.join(working_dir, filename), "w") as file:
+                for key, val in choice_dict.items():
+                    file.write(f"{key}: {val}\n")
+            debug_print(f"{filename} created")
 
+    return state_dict
+    
 def debug_print(*msgs):
     if debugging:
         custom_print(*msgs)
 
+
 def custom_print(*msgs):
     global last_justtextmsg
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    ENDC = '\033[0m'
-    
     message = " ".join(str(msg) for msg in msgs)
     justtextmsg = re.sub(r'\033\[\d+m', '', message)
     last_justtextmsg = justtextmsg
@@ -1165,8 +1309,7 @@ def print_existing_jobs():
     message = re.sub(r'\033\[\d+m', '', message)
     STATUS_WINDOW.value = message
     return STATUS_WINDOW.value
-    
-    
+
 def count_existing_jobs():
     global PENDING_JOBS_COUNT
     jobs = load_jobs(jobs_queue_file)
@@ -1199,12 +1342,16 @@ def create_and_verify_json(file_path):
 
 
 def load_jobs(file_path):
+    status_priority = {'editing': 0, 'executing': 1, 'pending': 2, 'failed': 3, 'missing': 4, 'completed': 5, 'archived': 6}
     with open(file_path, 'r') as file:
         jobs = json.load(file)
     for job in jobs:
-        if 'id' not in job:
+        if 'id' not in job or not job['id']:
             job['id'] = str(uuid.uuid4())
+    jobs.sort(key=lambda x: status_priority.get(x['status'], 6))
     return jobs
+
+
 
 
 def save_jobs(file_path, jobs):
@@ -1235,13 +1382,12 @@ def check_for_completed_failed_or_aborted_jobs():
                 custom_print(f"{GREEN}A job {GREEN}{source_basenames}{ENDC} to -> {GREEN}{os.path.basename(job['targetcache'])} was found that terminated early it will be moved back to the pending jobs queue - you have a Total of {PENDING_JOBS_COUNT + JOB_IS_RUNNING} in the Queue\n\n")
             save_jobs(jobs_queue_file, jobs)
     if not keep_completed_jobs:
-        jobs = [job for job in jobs if job['status'] != 'completed']
-        save_jobs(jobs_queue_file, jobs)
+        jobs_to_delete("completed")
         custom_print(f"{BLUE}All completed jobs have been removed, if you would like to keep completed jobs change the setting to True{ENDC}\n\n")
 
 
 def sanitize_filename(filename):
-    valid_chars = "-_.()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
+    valid_chars = "-_.()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     sanitized = ''.join(c if c in valid_chars else '_' for c in filename)
     sanitized = sanitized.strip()  # Remove leading and trailing spaces
     return sanitized
@@ -1285,7 +1431,7 @@ def check_for_unneeded_media_cache():
     # Create a set to store all needed filenames from the jobs
     needed_files = set()
     for job in jobs:
-        if job['status'] in {'pending', 'failed', 'missing', 'editing', 'executing'}:
+        if job['status'] in {'pending', 'failed', 'missing', 'editing', 'archived', 'executing'}:
             # Now handle sourcecache as a list
             for source_cache_path in job['sourcecache']:
                 source_basename = os.path.basename(source_cache_path)
@@ -1356,6 +1502,7 @@ def check_if_needed(job, source_or_target):
         count_existing_jobs
         print_existing_jobs
 
+
 def preprocess_execution_providers(data):
     new_data = data.copy()
     for key, value in new_data.items():
@@ -1371,7 +1518,9 @@ def preprocess_execution_providers(data):
                 # Assuming you don't want to keep original values that don't match, skip the else clause
             new_data[key] = new_providers  # Replace the old list with the new one
     return new_data
-################ 
+##
+
+
 def load_settings():
     config = configparser.ConfigParser()
 
@@ -1390,6 +1539,7 @@ def load_settings():
     }
     return settings
 
+
 def save_settings(settings):
     config = configparser.ConfigParser()
     config['Settings'] = {
@@ -1399,11 +1549,13 @@ def save_settings(settings):
     with open(settings_path, 'w') as configfile:
         config.write(configfile)
 
+
 def initialize_settings():
     settings = load_settings()
     global debugging, keep_completed_jobs
     debugging = settings['debugging']
     keep_completed_jobs = settings['keep_completed_jobs']
+
 
 def queueitup_settings():
     settings = load_settings()
@@ -1417,7 +1569,7 @@ def queueitup_settings():
 
         # Check if debugging value changed from True to False
         if original_debugging_value and not settings['debugging']:
-            files_to_delete = ['current_values.txt', 'job_args.txt', 'default_values.txt', 'arguments.txt']
+            files_to_delete = '*_values.txt'
             for filename in files_to_delete:
                 file_path = os.path.join(working_dir, filename)
                 if os.path.exists(file_path):
@@ -1452,7 +1604,8 @@ def queueitup_settings():
 
     setini.mainloop()
 
-################
+
+##
 #startup_init_checks_and_cleanup     
 #Globals and toggles
 script_root = os.path.dirname(os.path.abspath(__file__))
@@ -1482,21 +1635,20 @@ JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
 PENDING_JOBS_COUNT = count_existing_jobs()
 CURRENT_JOB_NUMBER = 0
-edit_queue_window = 0
+edit_queue_windowstatus = 0
 STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
 last_justtextmsg = ""
 root = None
 pending_jobs_var = None
-image_references = {}
 default_values = {}
 #code to determin if running inside atutomatic1111
 automatic1111 = os.path.isfile(os.path.join(base_dir, "flavor.txt")) and "automatic1111" in open(os.path.join(base_dir, "flavor.txt")).readline().strip()
 if automatic1111:
-    print("automatic1111")
-    from facefusion import core2
+    print("QueueItUp has detected: automatic1111")
+    # from facefusion import core2
     import facefusion.core2 as core2
     venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
-    debug_print("Venv Python Path:", venv_python)
+    debug_print("the Venv Python Path is:", venv_python)
 default_values = get_values_from_globals("default_values")
     # ANSI Color Codes     
 RED = '\033[91m'     #use this  
@@ -1504,28 +1656,29 @@ GREEN = '\033[92m'     #use this
 YELLOW = '\033[93m'     #use this  
 BLUE = '\033[94m'     #use this  
 ENDC = '\033[0m'       #use this    Resets color to default
-debug_print("Base Directory:", base_dir)
-debug_print("Working Directory:", working_dir)
-debug_print("Media Cache Directory:", media_cache_dir)
+debug_print("FaceFusion Base Directory:", base_dir)
+debug_print("QueueItUp Working Directory:", working_dir)
+debug_print("QueueItUp Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
-debug_print(f"{BLUE}Welcome Back To FaceFusion Queueing Addon{ENDC}\n\n")
+debug_print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
 debug_print(f"QUEUEITUP{BLUE} COLOR OUTPUT KEY")
 debug_print(f"{BLUE}BLUE = normal QueueItUp color output key")
 debug_print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 debug_print(f"{YELLOW}YELLOW = informational")
-debug_print(f"{RED}RED = Problem detected{ENDC}\n\n")
-debug_print(f"{YELLOW}Checking Status{ENDC}\n")
+debug_print(f"{RED}RED =QueueItUp detected a Problem{ENDC}\n\n")
+debug_print(f"{YELLOW}QueueItUp is Checking Status{ENDC}\n")
 create_and_verify_json(jobs_queue_file)
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
 print_existing_jobs()
 
-def run(ui : gr.Blocks) -> None:
-    concurrency_count = min(8, multiprocessing.cpu_count())
-    if automatic1111:
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)       
-    else:
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser)
 
-        #this works but good luck getting it to update if you change icon  
-        #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
+# def install_package(package):
+    # subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# try:
+    # import moviepy
+# except ImportError:
+    # print("moviepy is not installed. Installing now...")
+    # install_package("moviepy")
+    # import moviepy
