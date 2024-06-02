@@ -108,7 +108,7 @@ def run(ui : gr.Blocks) -> None:
     if automatic1111:
         ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)       
     else:
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser)
         #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
         
         
