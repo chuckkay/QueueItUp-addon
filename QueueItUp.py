@@ -15,6 +15,8 @@ import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
 import facefusion.globals
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
+import pkg_resources
+
 
 def pre_check() -> bool:
     return True
@@ -83,7 +85,7 @@ def listen() -> None:
     global EDIT_JOB_BUTTON, STATUS_WINDOW
     ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
     RUN_JOBS_BUTTON.click(execute_jobs)
-    EDIT_JOB_BUTTON.click(edit_queue_window)#, outputs=STATUS_WINDOW)
+    EDIT_JOB_BUTTON.click(edit_queue_window, outputs=STATUS_WINDOW)
     SETTINGS_BUTTON.click(queueitup_settings)
     frame_processors.listen()
     frame_processors_options.listen()
@@ -103,13 +105,20 @@ def listen() -> None:
     face_analyser.listen()
     common_options.listen()
 
+
+
 def run(ui : gr.Blocks) -> None:
-    concurrency_count = min(8, multiprocessing.cpu_count())
     if automatic1111:
+        concurrency_count = min(8, multiprocessing.cpu_count())
         ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)       
     else:
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser)
-        #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
+        gradio_version = pkg_resources.get_distribution("gradio").version
+        if gradio_version.startswith('3.'):
+            concurrency_count = min(8, multiprocessing.cpu_count())
+            ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
+        else:
+            ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
+            #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
         
         
 def assemble_queue():
@@ -238,11 +247,10 @@ def assemble_queue():
         save_jobs(jobs_queue_file, jobs)
     if root and root.winfo_exists():
         debug_print("edit queue windows is open")
-        count_existing_jobs()
         save_jobs(jobs_queue_file, jobs)
         refresh_frame_listbox()
-    
-    count_existing_jobs()
+    load_jobs(jobs_queue_file)
+    count_existing_jobs()    
     if JOB_IS_RUNNING:
         custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}\n\n")
     else:
@@ -252,7 +260,8 @@ def assemble_queue():
         
 def execute_jobs():
     global JOB_IS_RUNNING, JOB_IS_EXECUTING, CURRENT_JOB_NUMBER, jobs_queue_file, jobs
-    count_existing_jobs()
+    load_jobs(jobs_queue_file)
+    count_existing_jobs()    
     if not PENDING_JOBS_COUNT + JOB_IS_RUNNING > 0:
         custom_print(f"Whoops!!!, There are {PENDING_JOBS_COUNT} Job(s) queued. Add a job to the queue before pressing Run Jobs.\n\n")
         return STATUS_WINDOW.value
@@ -277,7 +286,7 @@ def execute_jobs():
             break
         current_run_job = first_pending_job
         current_run_job['headless'] = '--headless'
-        count_existing_jobs()
+        count_existing_jobs()        
         JOB_IS_EXECUTING = 1
         CURRENT_JOB_NUMBER += 1
         custom_print(f"{BLUE}Starting Job #{GREEN} {CURRENT_JOB_NUMBER}{ENDC}\n\n")
@@ -336,27 +345,33 @@ def execute_jobs():
         
 # things_to_do
 # need to make root window pop to the top when edit_queue_window is called again but already has edit_queue open and in its loop but in the background an not the forground
-
-# need to be able to call run_jobs_click and not have and not have the edit queue root window freezeing until the execute_jobs is compleated
-
-# when clone_job or batch_job adds jobs the should not go to the bottom of the job list
-    pass  
-
 def edit_queue_window():
     global root
     try:
         if root and root.winfo_exists():
+            # debug_print("Root window exists.")
+            # debug_print("Bringing existing root window to the foreground")
             root.deiconify()  # Ensure the window is not minimized
             root.lift()  # Lift the window to the top
             root.focus_force()  # Force focus on the window
             root.attributes('-topmost', True)  # Make it the topmost window
-            root.after(0, lambda: root.attributes('-topmost', False))  # Remove topmost attribute immediately after
+            root.after_idle(lambda: root.attributes('-topmost', False))  # Remove topmost attribute after idle
+            root.after(100, lambda: root.attributes('-topmost', True))  # Ensure it stays on top
+            root.after(200, lambda: root.attributes('-topmost', False))  # Then allow other windows to be on top
+            print_existing_jobs()
+            return STATUS_WINDOW.value
+
+
         else:
             edit_queue()
-    except tk.TclError:
+            print_existing_jobs()
+            return STATUS_WINDOW.value
+
+    except tk.TclError as e:
         root = None
         edit_queue()
-       
+        print_existing_jobs()
+        return STATUS_WINDOW.value
 def edit_queue():
     global root, frame, canvas, edit_queue_windowstatus, STATUS_WINDOW, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
 
@@ -389,7 +404,7 @@ def edit_queue():
     pending_jobs_var = tk.StringVar()
     pending_jobs_var.set(f"Delete {PENDING_JOBS_COUNT} Pending Jobs")
 
-    close_button = tk.Button(root, text="Close Window", command=root.destroy, font=custom_font)
+    close_button = tk.Button(root, text="Close Window", command=on_close, font=custom_font)
     close_button.pack(pady=5)
 
     refresh_button = tk.Button(root, text="Refresh View", command=lambda: refresh_frame_listbox(), font=custom_font)
@@ -415,8 +430,21 @@ def edit_queue():
     edit_queue_windowstatus = 1
     refresh_frame_listbox()
 
+    root.protocol("WM_DELETE_WINDOW", on_close)
+
     root.mainloop()
     edit_queue_windowstatus = 0
+    root = None  # Ensure root is set to None when the window is closed
+    print_existing_jobs()
+    return STATUS_WINDOW.value
+
+
+def on_close():
+    global root
+    print_existing_jobs()
+    if root:
+        root.destroy()
+    return STATUS_WINDOW.value
 
 def run_jobs_click():
     save_jobs(jobs_queue_file, jobs)
@@ -537,7 +565,7 @@ def update_job_listbox():
     try:
         if frame.winfo_exists():
             jobs = load_jobs(jobs_queue_file)
-            count_existing_jobs()
+            count_existing_jobs()            
             for widget in frame.winfo_children():
                 widget.destroy()
             for index, job in enumerate(jobs):
@@ -654,7 +682,7 @@ def update_job_listbox():
         debug_print(e)
 
 def refresh_buttonclick():
-    count_existing_jobs()
+    count_existing_jobs()    
     save_jobs(jobs_queue_file, jobs)
     refresh_frame_listbox()
 
@@ -1118,8 +1146,9 @@ def run_job_args(current_run_job):
         current_run_job['status'] = 'completed'
     else:
         current_run_job['status'] = 'failed'
-        with open(f"stderr - {current_run_job['id']}.txt", 'w') as f:
+        with open(os.path.join(working_dir, f"stderr-{current_run_job['id']}.txt"), 'w') as f:
             f.write(stderr)
+    
     return current_run_job
 
 
@@ -1296,7 +1325,7 @@ def custom_print(*msgs):
 
 
 def print_existing_jobs():
-    count_existing_jobs()
+    count_existing_jobs()    
     if JOB_IS_RUNNING:
         message = f"{BLUE}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) being Processed - Click Add Job to Queue more Jobs{ENDC}"
     else:
@@ -1368,8 +1397,8 @@ def format_cli_value(value):
 
 
 def check_for_completed_failed_or_aborted_jobs():
-    count_existing_jobs()
     jobs = load_jobs(jobs_queue_file)
+    print_existing_jobs()  
     for job in jobs:
         if job['status'] == 'executing':
             job['status'] = 'pending'
@@ -1479,8 +1508,7 @@ def check_if_needed(job, source_or_target):
             else:
                 action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job."
             debug_print(f"{action_message}\n\n")
-            count_existing_jobs
-            print_existing_jobs
+            print_existing_jobs()
     # Check and handle targetcache path
     if source_or_target in ['both', 'target']:
         target_cache_path = job['targetcache']
@@ -1499,8 +1527,7 @@ def check_if_needed(job, source_or_target):
         else:
             action_message = (f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job.\n\n")
         debug_print(f"{action_message}\n\n")
-        count_existing_jobs
-        print_existing_jobs
+        print_existing_jobs()
 
 
 def preprocess_execution_providers(data):
@@ -1620,10 +1647,14 @@ if not os.path.exists(working_dir):
     os.makedirs(working_dir)
 if not os.path.exists(media_cache_dir):
     os.makedirs(media_cache_dir)
-thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
 settings_path = os.path.join(working_dir, 'Settings.ini')
 initialize_settings()
+STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
+create_and_verify_json(jobs_queue_file)
+
+thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
+settings_path = os.path.join(working_dir, 'Settings.ini')
 # debugging = True
 # keep_completed_jobs = False
 ADD_JOB_BUTTON = gr.Button("Add Job ", variant="primary")
@@ -1633,10 +1664,11 @@ SETTINGS_BUTTON = gr.Button("Change Settings")
 #status_priority = {'editing': 0, 'pending': 1, 'failed': 2, 'executing': 3, 'completed': 4}
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
-PENDING_JOBS_COUNT = count_existing_jobs()
 CURRENT_JOB_NUMBER = 0
 edit_queue_windowstatus = 0
-STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
+
+PENDING_JOBS_COUNT = count_existing_jobs()
+
 last_justtextmsg = ""
 root = None
 pending_jobs_var = None
@@ -1667,7 +1699,7 @@ debug_print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 debug_print(f"{YELLOW}YELLOW = informational")
 debug_print(f"{RED}RED =QueueItUp detected a Problem{ENDC}\n\n")
 debug_print(f"{YELLOW}QueueItUp is Checking Status{ENDC}\n")
-create_and_verify_json(jobs_queue_file)
+
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
 print_existing_jobs()
