@@ -722,7 +722,7 @@ def remove_old_grid(job_id, source_or_target):
     grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
     if os.path.exists(grid_thumb_path):
         os.remove(grid_thumb_path)
-        debug_print(f"Deleted Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")  
+        debug_print(f"Deleted temporary Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")  
     
 def archive_job(job):
     if job['status'] == 'archived':
@@ -1471,7 +1471,7 @@ def check_for_unneeded_media_cache():
     for cache_file in cache_files:
         if cache_file not in needed_files:
             os.remove(os.path.join(media_cache_dir, cache_file))
-            debug_print(f"{GREEN}Deleted unneeded file: {cache_file}{ENDC}")
+            debug_print(f"{GREEN}Deleted unneeded temp mediacache file: {cache_file}{ENDC}")
 
 
 def check_if_needed(job, source_or_target):
