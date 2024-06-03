@@ -110,9 +110,11 @@ def listen() -> None:
 def run(ui : gr.Blocks) -> None:
     if automatic1111:
         concurrency_count = min(8, multiprocessing.cpu_count())
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)       
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)
     else:
         gradio_version = pkg_resources.get_distribution("gradio").version
+        debug_print(f"gradio version: {gradio_version}")
+
         if gradio_version.startswith('3.'):
             concurrency_count = min(8, multiprocessing.cpu_count())
             ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
