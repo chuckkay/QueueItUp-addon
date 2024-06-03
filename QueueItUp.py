@@ -112,12 +112,11 @@ def run(ui : gr.Blocks) -> None:
         concurrency_count = min(8, multiprocessing.cpu_count())
         ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)
     else:
-        gradio_version = pkg_resources.get_distribution("gradio").version
-        debug_print(f"gradio version: {gradio_version}")
+
 
         if gradio_version.startswith('3.'):
             concurrency_count = min(8, multiprocessing.cpu_count())
-            ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
+            ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser)
         else:
             ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
             #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
@@ -1690,6 +1689,8 @@ GREEN = '\033[92m'     #use this
 YELLOW = '\033[93m'     #use this  
 BLUE = '\033[94m'     #use this  
 ENDC = '\033[0m'       #use this    Resets color to default
+gradio_version = pkg_resources.get_distribution("gradio").version
+debug_print(f"gradio version: {gradio_version}")
 debug_print("FaceFusion Base Directory:", base_dir)
 debug_print("QueueItUp Working Directory:", working_dir)
 debug_print("QueueItUp Media Cache Directory:", media_cache_dir)
