@@ -1,4 +1,3 @@
-import multiprocessing
 import gradio as gr
 import os
 import re
@@ -15,7 +14,14 @@ import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
 import facefusion.globals
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
+try:
+    from facefusion.uis.components import target_options
+    yt_addon = True
+except ImportError:
+    yt_addon = False
+
 import pkg_resources
+
 
 
 def pre_check() -> bool:
@@ -52,6 +58,9 @@ def render() -> gr.Blocks:
                     source.render()
                 with gr.Blocks():
                     target.render()
+                if yt_addon:
+                    with gr.Blocks():
+                        target_options.render()
                 with gr.Blocks():
                     output.render()
                 with gr.Blocks():
@@ -97,6 +106,8 @@ def listen() -> None:
     output_options.listen()
     source.listen()
     target.listen()
+    if yt_addon:
+        target_options.listen()
     output.listen()
     preview.listen()
     trim_frame.listen()
@@ -109,16 +120,9 @@ def listen() -> None:
 
 def run(ui : gr.Blocks) -> None:
     if automatic1111:
-        concurrency_count = min(8, multiprocessing.cpu_count())
         ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)
     else:
-
-
-        if gradio_version.startswith('3.'):
-            concurrency_count = min(8, multiprocessing.cpu_count())
-            ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser)
-        else:
-            ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
+        ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
             #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
         
         
@@ -379,7 +383,6 @@ def edit_queue():
     root = tk.Tk()
     jobs = load_jobs(jobs_queue_file)
     PENDING_JOBS_COUNT = count_existing_jobs()
-    print_existing_jobs()
 
     root.geometry('1200x800')
     root.title("Edit Queued Jobs")
@@ -405,7 +408,7 @@ def edit_queue():
     pending_jobs_var = tk.StringVar()
     pending_jobs_var.set(f"Delete {PENDING_JOBS_COUNT} Pending Jobs")
 
-    close_button = tk.Button(root, text="Close Window", command=on_close, font=custom_font)
+    close_button = tk.Button(root, text="Close Window", command=close_window, font=custom_font)
     close_button.pack(pady=5)
 
     refresh_button = tk.Button(root, text="Refresh View", command=lambda: refresh_frame_listbox(), font=custom_font)
@@ -431,21 +434,13 @@ def edit_queue():
     edit_queue_windowstatus = 1
     refresh_frame_listbox()
 
-    root.protocol("WM_DELETE_WINDOW", on_close)
+    root.protocol("WM_DELETE_WINDOW", close_window)
 
     root.mainloop()
     edit_queue_windowstatus = 0
     root = None  # Ensure root is set to None when the window is closed
-    print_existing_jobs()
     return STATUS_WINDOW.value
 
-
-def on_close():
-    global root
-    print_existing_jobs()
-    if root:
-        root.destroy()
-    return STATUS_WINDOW.value
 
 def run_jobs_click():
     save_jobs(jobs_queue_file, jobs)
@@ -468,9 +463,9 @@ def batch_job(job):
     if isinstance(job['sourcecache'], str):
         job['sourcecache'] = [job['sourcecache']]
     current_extension = job['targetcache'].lower().rsplit('.', 1)[-1]
-    if current_extension in ['jpg', 'jpeg', 'png']:
+    if current_extension in ['jpg', 'jpeg', 'png', 'webp']:
         target_filetype = 'Image'
-    elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
+    elif current_extension in ['mp4', 'mov', 'avi', 'mkv', 'webm']:
         target_filetype = 'Video'
 
     def on_use_source():
@@ -506,10 +501,10 @@ def batch_job(job):
         if source_or_target == 'source':
             selected_paths = filedialog.askopenfilenames(
                 title="Select Multiple targets for BatchItUp to make multiple cloned jobs using each File",
-                filetypes=[('Image files', '*.jpg *.jpeg *.png')]
+                filetypes=[('Image files', '*.jpg *.jpeg  *.webp *.png')]
             )
         elif source_or_target == 'target':
-            file_types = [('Image files', '*.jpg *.jpeg *.png')] if target_filetype == 'Image' else [('Video files', '*.mp4 *.avi *.mov *.mkv')]
+            file_types = [('Image files', '*.jpg *.jpeg *.webp *.png')] if target_filetype == 'Image' else [('Video files', '*.mp4 *.avi *.webm *.mov *.mkv')]
             selected_paths = filedialog.askopenfilenames(
                 title="Select Multiple sources for BatchItUp to make multiple cloned jobs using each File",
                 filetypes=file_types
@@ -585,7 +580,7 @@ def update_job_listbox():
                     bg_color = 'green'
                 if job['status'] == 'pending':
                     bg_color = 'SystemButtonFace'
-                if not job['status'] == 'compleated':
+                if not job['status'] == 'completed':
                     job_id = job['id']
                     if not source_mediacache_exists:
                         debug_print(f"source mediacache {source_cache_path} is missing ")
@@ -696,9 +691,12 @@ def refresh_frame_listbox():
     update_job_listbox()
 
 def close_window():
+    global root
     save_jobs(jobs_queue_file, jobs)
     edit_queue_windowstatus = 0
-    root.destroy
+    if root:
+        root.destroy()
+    return STATUS_WINDOW.value
 
 def make_job_pending(job):
     job['status'] = 'pending'
@@ -913,13 +911,13 @@ def select_job_file(parent, job, source_or_target):
     job_id = job['id']
     file_types = []
     if source_or_target == 'source':
-        file_types = [('source files', '*.jpg *.jpeg *.png *.mp3 *.wav *.aac')]
+        file_types = [('source files', '*.jpg *.jpeg *.png *.webp *.mp3 *.wav *.aac')]
     elif source_or_target == 'target':
         current_extension = job['targetcache'].lower().rsplit('.', 1)[-1]
-        if current_extension in ['jpg', 'jpeg', 'png']:
-            file_types = [('Image files', '*.jpg *.jpeg *.png')]
-        elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
-            file_types = [('Video files', '*.mp4 *.avi *.mov *.mkv')]
+        if current_extension in ['jpg', 'jpeg', 'png', 'webp']:
+            file_types = [('Image files', '*.jpg *.jpeg *.webp *.png')]
+        elif current_extension in ['mp4', 'mov', 'avi', 'mkv', 'webm']:
+            file_types = [('Video files', '*.mp4 *.avi *.mov *.webm *.mkv')]
 
     if source_or_target == 'source':
         selected_paths = filedialog.askopenfilenames(title=f"Select {source_or_target.capitalize()} File(s)", filetypes=file_types)
@@ -943,7 +941,7 @@ def select_job_file(parent, job, source_or_target):
             job['status'] = 'missing'
 
         save_jobs(jobs_queue_file, jobs)
-        update_job_listbox()
+        refresh_frame_listbox()
 
 def create_job_thumbnail(parent, job, source_or_target):
     job_id = job['id']
@@ -983,7 +981,7 @@ def create_job_thumbnail(parent, job, source_or_target):
                 '-vframes', '1',
                 '-y', thumbnail_path
             ]
-        elif file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+        elif file_path.lower().endswith(('.jpg', '. webp', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
             cmd = [
                 'ffmpeg', '-i', file_path,
                 '-vf', f'thumbnail,scale=\'if(gt(a,1),{thumb_size},-1)\':\'if(gt(a,1),-1,{thumb_size})\',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black',
@@ -1157,7 +1155,11 @@ def run_job_args(current_run_job):
 def get_target_info(file_path, current_run_job):
     current_extension = file_path.lower().rsplit('.', 1)[-1]
     target_filetype = None
-    
+    orig_video_length = "unknown length"
+    output_video_length = "unknown length"
+    output_dimensions = "unknown dimensions"
+    orig_dimensions = "unknown dimensions"
+    target_filetype = "web media"
     if current_extension in ['jpg', 'jpeg', 'png']:
         target_filetype = 'Image'
     elif current_extension in ['mp4', 'mov', 'avi', 'mkv']:
@@ -1224,8 +1226,7 @@ def get_target_info(file_path, current_run_job):
         output_dimensions_match = re.search(r'--output-image-resolution\s+(\d+x\d+)', job_args)
         output_dimensions = output_dimensions_match.group(1) if output_dimensions_match else orig_dimensions
         
-        orig_video_length = ""
-        output_video_length = ""
+
 
     return target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions
 
