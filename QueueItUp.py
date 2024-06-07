@@ -14,7 +14,7 @@ import configparser
 import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
 import facefusion.globals
-from facefusion.uis.layouts import  editqueue, benchmark#, webcam 
+from facefusion.uis.layouts import benchmark#, webcam 
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
 
 try:
@@ -22,6 +22,11 @@ try:
     yt_addon = True
 except ImportError:
     yt_addon = False
+try:
+    from facefusion.uis.layouts import editqueue
+    editqueuescript = True
+except ImportError:
+    editqueuescript = False
 
 import pkg_resources
 
@@ -87,10 +92,11 @@ def render() -> gradio.Blocks:
                     with gradio.Blocks():
                         common_options.render()
         if not automatic1111:
-            with gradio.Tab("Edit Queue"):
-                if editqueue.pre_render():
-                    editqueue.render()
-                    editqueue.listen()
+            if editqueuescript:
+                with gradio.Tab("Edit Queue"):
+                    if editqueue.pre_render():
+                        editqueue.render()
+                        editqueue.listen()
             with gradio.Tab("Benchmark"):
                 if benchmark.pre_render():
                    benchmark.render()
