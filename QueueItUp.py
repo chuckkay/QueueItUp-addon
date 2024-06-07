@@ -1,4 +1,5 @@
-import gradio as gr
+import multiprocessing
+import gradio
 import os
 import re
 import sys
@@ -13,7 +14,9 @@ import configparser
 import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
 import facefusion.globals
+from facefusion.uis.layouts import  editqueue, benchmark#, webcam 
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
+
 try:
     from facefusion.uis.components import target_options
     yt_addon = True
@@ -22,71 +25,81 @@ except ImportError:
 
 import pkg_resources
 
-
-
 def pre_check() -> bool:
     return True
-
 
 def pre_render() -> bool:
     return True
 
-
-def render() -> gr.Blocks:
+def render() -> gradio.Blocks:
     global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW, SETTINGS_BUTTON
-    with gr.Blocks() as layout:
-        with gr.Row():
-            with gr.Column(scale=2):
-                with gr.Blocks():
-                    about.render()
-                with gr.Blocks():
-                    frame_processors.render()
-                with gr.Blocks():
-                    frame_processors_options.render()
-                with gr.Blocks():
-                    execution.render()
-                    execution_thread_count.render()
-                    execution_queue_count.render()
-                with gr.Blocks():
-                    memory.render()
-                with gr.Blocks():
-                    temp_frame.render()
-                with gr.Blocks():
-                    output_options.render()
-            with gr.Column(scale=2):
-                with gr.Blocks():
-                    source.render()
-                with gr.Blocks():
-                    target.render()
-                if yt_addon:
-                    with gr.Blocks():
-                        target_options.render()
-                with gr.Blocks():
-                    output.render()
-                with gr.Blocks():
-                    STATUS_WINDOW.render()
-                with gr.Blocks():
-                    ADD_JOB_BUTTON.render()
-                with gr.Blocks():
-                    RUN_JOBS_BUTTON.render()
-                with gr.Blocks():
-                    EDIT_JOB_BUTTON.render()
-                with gr.Blocks():
-                    SETTINGS_BUTTON.render()
-            with gr.Column(scale=3):
-                with gr.Blocks():
-                    preview.render()
-                with gr.Blocks():
-                    trim_frame.render()
-                with gr.Blocks():
-                    face_selector.render()
-                with gr.Blocks():
-                    face_masker.render()
-                with gr.Blocks():
-                    face_analyser.render()
-                with gr.Blocks():
-                    common_options.render()
-
+    with gradio.Blocks() as layout:
+        with gradio.Tab("Facefusion QueueItUp"):
+            with gradio.Row():
+                with gradio.Column(scale=2):
+                    with gradio.Blocks():
+                        about.render()
+                    with gradio.Blocks():
+                        frame_processors.render()
+                    with gradio.Blocks():
+                        frame_processors_options.render()
+                    with gradio.Blocks():
+                        execution.render()
+                        execution_thread_count.render()
+                        execution_queue_count.render()
+                    with gradio.Blocks():
+                        memory.render()
+                    with gradio.Blocks():
+                        temp_frame.render()
+                    with gradio.Blocks():
+                        output_options.render()
+                with gradio.Column(scale=2):
+                    with gradio.Blocks():
+                        source.render()
+                    with gradio.Blocks():
+                        target.render()
+                    if yt_addon:
+                        with gradio.Blocks():
+                            target_options.render()
+                    with gradio.Blocks():
+                        output.render()
+                    with gradio.Blocks():
+                        STATUS_WINDOW.render()
+                    with gradio.Blocks():
+                        ADD_JOB_BUTTON.render()
+                    with gradio.Blocks():
+                        RUN_JOBS_BUTTON.render()
+                    with gradio.Blocks():
+                        EDIT_JOB_BUTTON.render()
+                    with gradio.Blocks():
+                        SETTINGS_BUTTON.render()
+                with gradio.Column(scale=3):
+                    with gradio.Blocks():
+                        preview.render()
+                    with gradio.Blocks():
+                        trim_frame.render()
+                    with gradio.Blocks():
+                        face_selector.render()
+                    with gradio.Blocks():
+                        face_masker.render()
+                    with gradio.Blocks():
+                        face_analyser.render()
+                    with gradio.Blocks():
+                        common_options.render()
+        with gradio.Tab("Edit Queue"):
+            if editqueue.pre_render():
+                editqueue.render()
+                editqueue.listen()
+        with gradio.Tab("Benchmark"):
+            if benchmark.pre_render():
+               benchmark.render()
+               benchmark.listen()
+        # if not webcam.pre_check():
+            # return layout
+        # with gradio.Tab("Webcam"):
+            # if webcam.pre_render():
+               # webcam.render()
+               # webcam.listen()
     return layout
     
 
@@ -118,12 +131,21 @@ def listen() -> None:
 
 
 
-def run(ui : gr.Blocks) -> None:
+def run(ui : gradio.Blocks) -> None:
     if automatic1111:
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)
+        concurrency_count = min(8, multiprocessing.cpu_count())
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True, inbrowser = True)
     else:
-        ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
-            #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
+        if gradio_version.startswith('3.'):
+            concurrency_count = min(8, multiprocessing.cpu_count())
+            ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
+        else:
+            ui.launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
+
+
+        # ui.queue()
+        # ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
+        # ui.launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
         
         
 def assemble_queue():
@@ -298,7 +320,8 @@ def execute_jobs():
         printjobtype = current_run_job['frame_processors']
         custom_print(f"{BLUE}Executing Job # {CURRENT_JOB_NUMBER} of {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT}  {ENDC}\n\n")
 
-
+        if not os.path.exists(current_run_job['output_path']):
+            os.makedirs(current_run_job['output_path'])
         if isinstance(current_run_job['sourcecache'], list):
             source_basenames = f"Source Files {', '.join(os.path.basename(path) for path in current_run_job['sourcecache'])}"
         else:
@@ -1652,17 +1675,17 @@ if not os.path.exists(media_cache_dir):
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
 settings_path = os.path.join(working_dir, 'Settings.ini')
 initialize_settings()
-STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
+STATUS_WINDOW = gradio.Textbox(label="Job Status", interactive=True)
 create_and_verify_json(jobs_queue_file)
 
 thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
 settings_path = os.path.join(working_dir, 'Settings.ini')
 # debugging = True
 # keep_completed_jobs = False
-ADD_JOB_BUTTON = gr.Button("Add Job ", variant="primary")
-RUN_JOBS_BUTTON = gr.Button("Run Jobs", variant="primary")
-EDIT_JOB_BUTTON = gr.Button("Edit Jobs")
-SETTINGS_BUTTON = gr.Button("Change Settings")
+ADD_JOB_BUTTON = gradio.Button("Add Job ", variant="primary")
+RUN_JOBS_BUTTON = gradio.Button("Run Jobs", variant="primary")
+EDIT_JOB_BUTTON = gradio.Button("Edit Jobs")
+SETTINGS_BUTTON = gradio.Button("Change Settings")
 #status_priority = {'editing': 0, 'pending': 1, 'failed': 2, 'executing': 3, 'completed': 4}
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
