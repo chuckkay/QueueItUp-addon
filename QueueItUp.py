@@ -86,20 +86,21 @@ def render() -> gradio.Blocks:
                         face_analyser.render()
                     with gradio.Blocks():
                         common_options.render()
-        with gradio.Tab("Edit Queue"):
-            if editqueue.pre_render():
-                editqueue.render()
-                editqueue.listen()
-        with gradio.Tab("Benchmark"):
-            if benchmark.pre_render():
-               benchmark.render()
-               benchmark.listen()
-        # if not webcam.pre_check():
-            # return layout
-        # with gradio.Tab("Webcam"):
-            # if webcam.pre_render():
-               # webcam.render()
-               # webcam.listen()
+        if not automatic1111:
+            with gradio.Tab("Edit Queue"):
+                if editqueue.pre_render():
+                    editqueue.render()
+                    editqueue.listen()
+            with gradio.Tab("Benchmark"):
+                if benchmark.pre_render():
+                   benchmark.render()
+                   benchmark.listen()
+            # if not webcam.pre_check():
+                # return layout
+            # with gradio.Tab("Webcam"):
+                # if webcam.pre_render():
+                   # webcam.render()
+                   # webcam.listen()
     return layout
     
 
