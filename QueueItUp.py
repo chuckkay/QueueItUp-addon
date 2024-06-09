@@ -145,9 +145,9 @@ def run(ui : gradio.Blocks) -> None:
     else:
         if gradio_version.startswith('3.'):
             concurrency_count = min(8, multiprocessing.cpu_count())
-            ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
+            ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser)
         else:
-            ui.launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser, favicon_path="facefusion.ico")
+            ui.launch(show_api = False, quiet = True, inbrowser = facefusion.globals.open_browser)
 
 
         # ui.queue()
@@ -861,7 +861,7 @@ def edit_job_arguments_text(job):
         arg, value = match.groups()
         value = ' '.join(value.split())  # Normalize spaces
         job_args_dict[arg] = value
-    skip_keys = ['--source-paths', '--target-path', '--output-path', '--face-recognizer-model', '--ui-layouts']
+    skip_keys = ['--source-paths', '--target-path', '--output-path', '--face-recognizer-model', '--ui-layouts', '--config-path', '--force-download', '--skip-download']
     for arg, default_value in default_values.items():
         cli_arg = '--' + arg.replace('_', '-')
         if cli_arg in skip_keys:
@@ -1736,7 +1736,6 @@ debug_print(f"{YELLOW}QueueItUp is Checking Status{ENDC}\n")
 
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
-print_existing_jobs()
 
 
 # def install_package(package):
