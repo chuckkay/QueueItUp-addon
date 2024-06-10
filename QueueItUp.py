@@ -6,6 +6,7 @@ import uuid
 import time
 import math
 import json
+import glob
 import shutil
 import tkinter as tk
 import threading
@@ -71,8 +72,8 @@ def render() -> gr.Blocks:
                     RUN_JOBS_BUTTON.render()
                 with gr.Blocks():
                     EDIT_JOB_BUTTON.render()
-                with gr.Blocks():
-                    SETTINGS_BUTTON.render()
+                # with gr.Blocks():
+                    # SETTINGS_BUTTON.render()
             with gr.Column(scale=3):
                 with gr.Blocks():
                     preview.render()
@@ -95,7 +96,7 @@ def listen() -> None:
     ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
     RUN_JOBS_BUTTON.click(execute_jobs)
     EDIT_JOB_BUTTON.click(edit_queue_window, outputs=STATUS_WINDOW)
-    SETTINGS_BUTTON.click(queueitup_settings)
+    # SETTINGS_BUTTON.click(queueitup_settings)
     frame_processors.listen()
     frame_processors_options.listen()
     execution.listen()
@@ -348,38 +349,161 @@ def execute_jobs():
     save_jobs(jobs_queue_file, jobs)
     check_for_unneeded_media_cache()
 
-        
-# things_to_do
-# need to make root window pop to the top when edit_queue_window is called again but already has edit_queue open and in its loop but in the background an not the forground
-def edit_queue_window():
-    global root
-    try:
+
+
+# Initialize the setini variable in the global scope
+setini = None
+
+def load_settings():
+    config = configparser.ConfigParser()
+    if not os.path.exists(settings_path):
+        config['QueueItUp'] = {
+            'debugging': 'True',
+            'keep_completed_jobs': 'True'
+        }
+        with open(settings_path, 'w') as configfile:
+            config.write(configfile)
+    config.read(settings_path)
+    if 'QueueItUp' not in config.sections():
+        config['QueueItUp'] = {
+            'debugging': 'True',
+            'keep_completed_jobs': 'True'
+        }
+        with open(settings_path, 'w') as configfile:
+            config.write(configfile)
+    settings = {
+        'debugging': config.getboolean('QueueItUp', 'debugging'),
+        'keep_completed_jobs': config.getboolean('QueueItUp', 'keep_completed_jobs')
+    }
+    return settings
+
+def save_settings(settings):
+    config = configparser.ConfigParser()
+    config.read(settings_path)
+    if 'QueueItUp' not in config.sections():
+        config.add_section('QueueItUp')
+    config.set('QueueItUp', 'debugging', str(settings['debugging']))
+    config.set('QueueItUp', 'keep_completed_jobs', str(settings['keep_completed_jobs']))
+    with open(settings_path, 'w') as configfile:
+        config.write(configfile)
+
+def initialize_settings():
+    settings = load_settings()
+    global debugging, keep_completed_jobs
+    debugging = settings['debugging']
+    keep_completed_jobs = settings['keep_completed_jobs']
+
+def queueitup_settings():
+    def create_settings_window():
+        global setini
+        settings = load_settings()
+        original_debugging_value = settings['debugging']
+        original_keep_completed_jobs_value = settings['keep_completed_jobs']
+
+        def save_and_close():
+            global setini
+            settings['debugging'] = debugging_var.get()
+            settings['keep_completed_jobs'] = keep_completed_jobs_var.get()
+            save_settings(settings)
+            initialize_settings()
+
+            if original_debugging_value and not settings['debugging']:
+                files_to_delete_pattern = os.path.join(working_dir, '*_values.txt')
+                for file_path in glob.glob(files_to_delete_pattern):
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                    except PermissionError as e:
+                        messagebox.showerror("Permission Error", f"Failed to delete {file_path}: {e}")
+                    except Exception as e:
+                        messagebox.showerror("Error", f"An error occurred while deleting {file_path}: {e}")
+
+            if original_keep_completed_jobs_value and not settings['keep_completed_jobs']:
+                jobs_to_delete("completed")
+
+            if setini is not None:
+                setini.destroy()
+                setini = None
+
+        def on_closing():
+            global setini
+            if setini is not None:
+                setini.destroy()
+                setini = None
+
+        if setini is not None and setini.winfo_exists():
+            setini.lift()
+            setini.focus_force()
+            return
+
         if root and root.winfo_exists():
-            # debug_print("Root window exists.")
-            # debug_print("Bringing existing root window to the foreground")
+            setini = Toplevel(root)
+        else:
+            setini = tk.Tk()
+
+        setini.title("QueueItUp Settings")
+        setini.protocol("WM_DELETE_WINDOW", on_closing)
+
+        window_width = 300
+        window_height = 150
+        screen_width = setini.winfo_screenwidth()
+        screen_height = setini.winfo_screenheight()
+        position_top = int(screen_height / 2 - window_height / 2)
+        position_right = int(screen_width / 2 - window_width / 2)
+
+        setini.geometry(f'{window_width}x{window_height}+{position_right}+{position_top}')
+        setini.attributes('-topmost', True)
+
+        debugging_var = tk.BooleanVar(value=settings['debugging'])
+        keep_completed_jobs_var = tk.BooleanVar(value=settings['keep_completed_jobs'])
+
+        tk.Label(setini, text="Debugging:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=5)
+        tk.Checkbutton(setini, variable=debugging_var).grid(row=0, column=1, padx=10, pady=5)
+
+        tk.Label(setini, text="Keep Completed Jobs:").grid(row=1, column=0, sticky=tk.W, padx=10, pady=5)
+        tk.Checkbutton(setini, variable=keep_completed_jobs_var).grid(row=1, column=1, padx=10, pady=5)
+
+        tk.Button(setini, text="Save", command=save_and_close).grid(row=2, column=0, columnspan=2, pady=10)
+
+        setini.mainloop()
+
+    if root and root.winfo_exists():
+        root.after(0, create_settings_window)
+    else:
+        create_settings_window()
+def edit_queue_window():
+    global root, edit_queue_running
+    try:
+        if root and root.winfo_exists() and edit_queue_running:
             root.deiconify()  # Ensure the window is not minimized
             root.lift()  # Lift the window to the top
             root.focus_force()  # Force focus on the window
-            root.attributes('-topmost', True)  # Make it the topmost window
-            root.after_idle(lambda: root.attributes('-topmost', False))  # Remove topmost attribute after idle
-            root.after(100, lambda: root.attributes('-topmost', True))  # Ensure it stays on top
-            root.after(200, lambda: root.attributes('-topmost', False))  # Then allow other windows to be on top
+            
+            # Additional measures to ensure the window stays on top
+            root.attributes('-topmost', True)
+            root.after(10, lambda: root.attributes('-topmost', False))
+            root.after(20, lambda: root.attributes('-topmost', True))
+            root.after(30, lambda: root.attributes('-topmost', False))
+
             print_existing_jobs()
             return STATUS_WINDOW.value
-
-
         else:
             edit_queue()
             print_existing_jobs()
             return STATUS_WINDOW.value
-
     except tk.TclError as e:
         root = None
         edit_queue()
         print_existing_jobs()
         return STATUS_WINDOW.value
+
 def edit_queue():
-    global root, frame, canvas, edit_queue_windowstatus, STATUS_WINDOW, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
+    global root, edit_queue_running, frame, canvas, STATUS_WINDOW, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
+
+    if edit_queue_running:
+        return  # Prevent multiple instances of the window
+
+    edit_queue_running = True
 
     root = tk.Tk()
     jobs = load_jobs(jobs_queue_file)
@@ -412,10 +536,13 @@ def edit_queue():
     close_button = tk.Button(root, text="Close Window", command=close_window, font=custom_font)
     close_button.pack(pady=5)
 
-    refresh_button = tk.Button(root, text="Refresh View", command=lambda: refresh_frame_listbox(), font=custom_font)
+    settings_button2 = tk.Button(root, text="queueitup_settings", command=queueitup_settings, font=custom_font)
+    settings_button2.pack(pady=5)
+
+    refresh_button = tk.Button(root, text="Refresh View", command=refresh_frame_listbox, font=custom_font)
     refresh_button.pack(pady=5)
 
-    run_jobs_button = tk.Button(root, text="Run Pending Jobs", command=lambda: run_jobs_click(), font=custom_font)
+    run_jobs_button = tk.Button(root, text="Run Pending Jobs", command=run_jobs_click, font=custom_font)
     run_jobs_button.pack(pady=5)
     pending_jobs_button = tk.Button(root, textvariable=pending_jobs_var, command=lambda: jobs_to_delete("pending"), font=custom_font)
     pending_jobs_button.pack(pady=5)
@@ -432,16 +559,12 @@ def edit_queue():
     completed_jobs_button = tk.Button(root, text="Delete Completed", command=lambda: jobs_to_delete("completed"), font=custom_font)
     completed_jobs_button.pack(pady=5)
 
-    edit_queue_windowstatus = 1
     refresh_frame_listbox()
-
     root.protocol("WM_DELETE_WINDOW", close_window)
-
     root.mainloop()
-    edit_queue_windowstatus = 0
     root = None  # Ensure root is set to None when the window is closed
+    edit_queue_running = False  # Reset the running state
     return STATUS_WINDOW.value
-
 
 def run_jobs_click():
     save_jobs(jobs_queue_file, jobs)
@@ -576,7 +699,7 @@ def update_job_listbox():
                 if job['status'] == 'executing':
                     bg_color = 'black'
                 if job['status'] == 'completed':
-                    bg_color = 'grey'
+                    bg_color = 'goldenrod'
                 if job['status'] == 'editing':
                     bg_color = 'green'
                 if job['status'] == 'pending':
@@ -694,7 +817,7 @@ def refresh_frame_listbox():
 def close_window():
     global root
     save_jobs(jobs_queue_file, jobs)
-    edit_queue_windowstatus = 0
+    edit_queue_running = False
     if root:
         root.destroy()
     return STATUS_WINDOW.value
@@ -714,7 +837,7 @@ def jobs_to_delete(jobstatus):
             remove_old_grid(job_id, source_or_target = 'target')
     jobs = [job for job in jobs if job['status'] != jobstatus]
     save_jobs(jobs_queue_file, jobs)
-    if edit_queue_windowstatus > 0:
+    if edit_queue_running:
         refresh_frame_listbox()
     
 def remove_old_grid(job_id, source_or_target):
@@ -1551,115 +1674,44 @@ def preprocess_execution_providers(data):
 ##
 
 
-def load_settings():
-    config = configparser.ConfigParser()
-
-    if not os.path.exists(settings_path):
-        config['Settings'] = {
-            'debugging': 'True',
-            'keep_completed_jobs': 'True'
-        }
-        with open(settings_path, 'w') as configfile:
-            config.write(configfile)
-
-    config.read(settings_path)
-    settings = {
-        'debugging': config.getboolean('Settings', 'debugging'),
-        'keep_completed_jobs': config.getboolean('Settings', 'keep_completed_jobs')
-    }
-    return settings
-
-
-def save_settings(settings):
-    config = configparser.ConfigParser()
-    config['Settings'] = {
-        'debugging': str(settings['debugging']),
-        'keep_completed_jobs': str(settings['keep_completed_jobs'])
-    }
-    with open(settings_path, 'w') as configfile:
-        config.write(configfile)
-
-
-def initialize_settings():
-    settings = load_settings()
-    global debugging, keep_completed_jobs
-    debugging = settings['debugging']
-    keep_completed_jobs = settings['keep_completed_jobs']
-
-
-def queueitup_settings():
-    settings = load_settings()
-    original_debugging_value = settings['debugging']
-
-    def save_and_close():
-        settings['debugging'] = debugging_var.get()
-        settings['keep_completed_jobs'] = keep_completed_jobs_var.get()
-        save_settings(settings)
-        initialize_settings()
-
-        # Check if debugging value changed from True to False
-        if original_debugging_value and not settings['debugging']:
-            files_to_delete = '*_values.txt'
-            for filename in files_to_delete:
-                file_path = os.path.join(working_dir, filename)
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-
-        setini.destroy()
-
-    setini = tk.Tk()
-    setini.title("QueueItUp Settings")
-
-    # Calculate the position to center the window
-    window_width = 300
-    window_height = 150
-    screen_width = setini.winfo_screenwidth()
-    screen_height = setini.winfo_screenheight()
-    position_top = int(screen_height / 2 - window_height / 2)
-    position_right = int(screen_width / 2 - window_width / 2)
-
-    setini.geometry(f'{window_width}x{window_height}+{position_right}+{position_top}')
-    setini.attributes('-topmost', True)
-
-    debugging_var = tk.BooleanVar(value=settings['debugging'])
-    keep_completed_jobs_var = tk.BooleanVar(value=settings['keep_completed_jobs'])
-
-    tk.Label(setini, text="Debugging:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=5)
-    tk.Checkbutton(setini, variable=debugging_var).grid(row=0, column=1, padx=10, pady=5)
-
-    tk.Label(setini, text="Keep Completed Jobs:").grid(row=1, column=0, sticky=tk.W, padx=10, pady=5)
-    tk.Checkbutton(setini, variable=keep_completed_jobs_var).grid(row=1, column=1, padx=10, pady=5)
-
-    tk.Button(setini, text="Save", command=save_and_close).grid(row=2, column=0, columnspan=2, pady=10)
-
-    setini.mainloop()
-
-
 ##
-#startup_init_checks_and_cleanup     
-#Globals and toggles
+#startup_init_checks_and_cleanup, Globals and toggles
 script_root = os.path.dirname(os.path.abspath(__file__))
 base_dir = os.path.dirname(os.path.dirname(os.path.dirname(script_root)))
-
-# Appending 'QueueItUp' to the adjusted base directory
 user_dir = "QueueItUp"
 working_dir = os.path.normpath(os.path.join(base_dir, user_dir))
 media_cache_dir = os.path.normpath(os.path.join(working_dir, "mediacache"))
-
+debugging = True
+keep_completed_jobs = True
+default_values = {}
 if not os.path.exists(working_dir):
     os.makedirs(working_dir)
 if not os.path.exists(media_cache_dir):
     os.makedirs(media_cache_dir)
-jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
-settings_path = os.path.join(working_dir, 'Settings.ini')
-initialize_settings()
 STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
+jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
+default_values = get_values_from_globals("default_values")  
+#code to determin if running inside atutomatic1111
+automatic1111 = os.path.isfile(os.path.join(base_dir, "flavor.txt")) and "automatic1111" in open(os.path.join(base_dir, "flavor.txt")).readline().strip()
+
+if not automatic1111:
+    settings_path = default_values.get("config_path", "")
+
+if automatic1111:
+    print("QueueItUp has detected: automatic1111")
+    # from facefusion import core2
+    import facefusion.core2 as core2
+    venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
+    settings_path = os.path.join(base_dir, "facefusion.ini")
+
+
+
+
+initialize_settings()
 create_and_verify_json(jobs_queue_file)
 
 thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
-settings_path = os.path.join(working_dir, 'Settings.ini')
-# debugging = True
-# keep_completed_jobs = False
+
 ADD_JOB_BUTTON = gr.Button("Add Job ", variant="primary")
 RUN_JOBS_BUTTON = gr.Button("Run Jobs", variant="primary")
 EDIT_JOB_BUTTON = gr.Button("Edit Jobs")
@@ -1668,23 +1720,18 @@ SETTINGS_BUTTON = gr.Button("Change Settings")
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
 CURRENT_JOB_NUMBER = 0
-edit_queue_windowstatus = 0
+edit_queue_running = False
 
+                
+                                                          
+                     
 PENDING_JOBS_COUNT = count_existing_jobs()
 
 last_justtextmsg = ""
 root = None
 pending_jobs_var = None
-default_values = {}
-#code to determin if running inside atutomatic1111
-automatic1111 = os.path.isfile(os.path.join(base_dir, "flavor.txt")) and "automatic1111" in open(os.path.join(base_dir, "flavor.txt")).readline().strip()
-if automatic1111:
-    print("QueueItUp has detected: automatic1111")
-    # from facefusion import core2
-    import facefusion.core2 as core2
-    venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
-    debug_print("the Venv Python Path is:", venv_python)
-default_values = get_values_from_globals("default_values")
+
+        
     # ANSI Color Codes     
 RED = '\033[91m'     #use this  
 GREEN = '\033[92m'     #use this  
@@ -1707,8 +1754,8 @@ debug_print(f"{YELLOW}QueueItUp is Checking Status{ENDC}\n")
 
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
-
-
+if automatic1111:
+    debug_print("the Venv Python Path is:", venv_python)
 # def install_package(package):
     # subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
