@@ -6,6 +6,7 @@ import uuid
 import time
 import math
 import json
+import multiprocessing
 import glob
 import shutil
 import tkinter as tk
@@ -87,8 +88,63 @@ def render() -> gr.Blocks:
                     face_analyser.render()
                 with gr.Blocks():
                     common_options.render()
-
     return layout
+
+                          
+                                                                          
+                               
+                      
+                                    
+                                 
+                                  
+                                 
+                                             
+                                 
+                                                     
+                                 
+                                      
+                                                   
+                                                  
+                                 
+                                   
+                                 
+                                       
+                                 
+                                           
+                                    
+                                 
+                                   
+                                 
+                                   
+                            
+                                     
+                                               
+                                 
+                                   
+                                 
+                                          
+                                 
+                                           
+                                 
+                                            
+                                 
+                                            
+                                   
+                                              
+                                    
+                                 
+                                    
+                                 
+                                       
+                                 
+                                          
+                                 
+                                        
+                                 
+                                          
+                                 
+                                           
+                 
     
 
 def listen() -> None:
@@ -121,7 +177,13 @@ def listen() -> None:
 
 def run(ui : gr.Blocks) -> None:
     if automatic1111:
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = True)
+        import multiprocessing
+        concurrency_count = min(8, multiprocessing.cpu_count())
+         
+                                                                                
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True)
+            
+        
     else:
         ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
             #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
@@ -1190,6 +1252,7 @@ def update_paths(job, path, source_or_target):
     save_jobs(jobs_queue_file, jobs)
 
 def run_job_args(current_run_job):
+    global run_job_args
     if isinstance(current_run_job['sourcecache'], list):
         arg_source_paths = ' '.join(f'-s "{p}"' for p in current_run_job['sourcecache'])
     else:
@@ -1200,8 +1263,8 @@ def run_job_args(current_run_job):
 
     simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
     simulated_cmd = simulated_args.replace('\\\\', '\\')
-    ui_layouts = 'ui_layouts'
-    setattr(facefusion.globals, ui_layouts, ['QueueItUp'])
+    # ui_layouts = 'ui_layouts'
+    # setattr(facefusion.globals, ui_layouts, ['QueueItUp'])
 
     if automatic1111:
         print (f"{venv_python} {base_dir}\\run2.py {simulated_cmd}")
@@ -1690,16 +1753,19 @@ if not os.path.exists(media_cache_dir):
     os.makedirs(media_cache_dir)
 STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
-default_values = get_values_from_globals("default_values")  
 #code to determin if running inside atutomatic1111
 automatic1111 = os.path.isfile(os.path.join(base_dir, "flavor.txt")) and "automatic1111" in open(os.path.join(base_dir, "flavor.txt")).readline().strip()
 
 if not automatic1111:
+    default_values = get_values_from_globals("default_values")  
     settings_path = default_values.get("config_path", "")
+    
+    # settings_path = default_values.get("config_path", "")
+    # default_values = get_values_from_globals("default_values")  
+
 
 if automatic1111:
     print("QueueItUp has detected: automatic1111")
-    # from facefusion import core2
     import facefusion.core2 as core2
     venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
     settings_path = os.path.join(base_dir, "facefusion.ini")
@@ -1716,7 +1782,6 @@ ADD_JOB_BUTTON = gr.Button("Add Job ", variant="primary")
 RUN_JOBS_BUTTON = gr.Button("Run Jobs", variant="primary")
 EDIT_JOB_BUTTON = gr.Button("Edit Jobs")
 SETTINGS_BUTTON = gr.Button("Change Settings")
-#status_priority = {'editing': 0, 'pending': 1, 'failed': 2, 'executing': 3, 'completed': 4}
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
 CURRENT_JOB_NUMBER = 0
@@ -1744,6 +1809,8 @@ debug_print("FaceFusion Base Directory:", base_dir)
 debug_print("QueueItUp Working Directory:", working_dir)
 debug_print("QueueItUp Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
+if automatic1111:
+    debug_print("the Venv Python Path is:", venv_python)
 debug_print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
 debug_print(f"QUEUEITUP{BLUE} COLOR OUTPUT KEY")
 debug_print(f"{BLUE}BLUE = normal QueueItUp color output key")
@@ -1754,8 +1821,6 @@ debug_print(f"{YELLOW}QueueItUp is Checking Status{ENDC}\n")
 
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
-if automatic1111:
-    debug_print("the Venv Python Path is:", venv_python)
 # def install_package(package):
     # subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
