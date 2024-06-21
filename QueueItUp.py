@@ -6,7 +6,6 @@ import uuid
 import time
 import math
 import json
-import multiprocessing
 import glob
 import shutil
 import tkinter as tk
@@ -23,7 +22,6 @@ except ImportError:
     yt_addon = False
 
 import pkg_resources
-
 
 
 def pre_check() -> bool:
@@ -90,62 +88,6 @@ def render() -> gr.Blocks:
                     common_options.render()
     return layout
 
-                          
-                                                                          
-                               
-                      
-                                    
-                                 
-                                  
-                                 
-                                             
-                                 
-                                                     
-                                 
-                                      
-                                                   
-                                                  
-                                 
-                                   
-                                 
-                                       
-                                 
-                                           
-                                    
-                                 
-                                   
-                                 
-                                   
-                            
-                                     
-                                               
-                                 
-                                   
-                                 
-                                          
-                                 
-                                           
-                                 
-                                            
-                                 
-                                            
-                                   
-                                              
-                                    
-                                 
-                                    
-                                 
-                                       
-                                 
-                                          
-                                 
-                                        
-                                 
-                                          
-                                 
-                                           
-                 
-    
 
 def listen() -> None:
     global EDIT_JOB_BUTTON, STATUS_WINDOW
@@ -178,17 +120,15 @@ def listen() -> None:
 def run(ui : gr.Blocks) -> None:
     if automatic1111:
         import multiprocessing
+
         concurrency_count = min(8, multiprocessing.cpu_count())
-         
-                                                                                
-        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True)
+        ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True)           
             
-        
     else:
         ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
             #ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
         
-        
+    
 def assemble_queue():
     global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
     missing_paths = []
@@ -208,7 +148,7 @@ def assemble_queue():
     current_values = get_values_from_globals('current_values')
 
     differences = {}
-    keys_to_skip = ["source_paths", "target_path", "output_path", "ui_layouts", "face_recognizer_model", "headless"]
+    keys_to_skip = ["source_paths", "output_hash", "target_path", "output_path", "ui_layouts", "face_recognizer_model", "headless"]
     ### is this still needed?
     if "frame_processors" in current_values:
         frame_processors = current_values["frame_processors"]
@@ -247,7 +187,14 @@ def assemble_queue():
     source_paths = current_values.get("source_paths", [])
     target_path = current_values.get("target_path", "")
     output_path = current_values.get("output_path", "")
-
+    output_hash = current_values.get("output_hash", "")
+    # if output_path
+    # if not output_path:
+        # output_path = default_values.get("output_path", "")
+        # if not output_path:
+            # output_path = "outputs"
+    if not next_beta:
+        output_hash = str(uuid.uuid4())[:8]
     while True:
         if JOB_IS_RUNNING:
             if JOB_IS_EXECUTING:
@@ -293,6 +240,7 @@ def assemble_queue():
         "sourcecache": (cache_source_paths),
         "targetcache": (cache_target_path),
         "output_path": (output_path),
+        "id": (output_hash)
     }
 
     if debugging:
@@ -305,7 +253,6 @@ def assemble_queue():
             check_if_needed(oldeditjob, 'source')
         if not (oldeditjob['targetcache'] == new_job['sourcecache'] or oldeditjob['targetcache'] == new_job['targetcache']):
             check_if_needed(oldeditjob, 'target')
-
         job.update(new_job)
         save_jobs(jobs_queue_file, jobs)
         custom_print(f"{GREEN}You have successfully returned the Edited job back to the job Queue, it is now a Pending Job {ENDC}")
@@ -331,11 +278,11 @@ def execute_jobs():
     load_jobs(jobs_queue_file)
     count_existing_jobs()    
     if not PENDING_JOBS_COUNT + JOB_IS_RUNNING > 0:
-        custom_print(f"Whoops!!!, There are {PENDING_JOBS_COUNT} Job(s) queued. Add a job to the queue before pressing Run Jobs.\n\n")
+        custom_print(f"{RED}Whoops!!!, {YELLOW}There are {PENDING_JOBS_COUNT} Job(s) queued.{ENDC} Add a job to the queue before pressing Run Jobs.\n\n")
         return STATUS_WINDOW.value
 
     if PENDING_JOBS_COUNT + JOB_IS_RUNNING > 0 and JOB_IS_RUNNING:
-        custom_print(f"Whoops a Job is already executing, with {PENDING_JOBS_COUNT} more job(s) waiting to be processed.\n\n You don't want more than one job running at the same time your GPU can't handle that,\n\nYou just need to click add job if jobs are already running, and the job will be placed in line for execution. you can edit the job order with Edit Queue button\n\n")
+        custom_print(f"{RED}Whoops {YELLOW}a Job is already executing, with {PENDING_JOBS_COUNT} more job(s) waiting to be processed.\n\n {RED}You don't want more than one job running at the same time your GPU can't handle that,{YELLOW}\n\nYou just need to click add job if jobs are already running, and the job will be placed in line for execution. you can edit the job order with Edit Queue button{ENDC}\n\n")
         return STATUS_WINDOW.value
         
     jobs = load_jobs(jobs_queue_file)
@@ -635,6 +582,7 @@ def run_jobs_click():
 def clone_job(job):
     clonedjob = job.copy()  # Copy the existing job to preserve other attributes
     clonedjob['id'] = str(uuid.uuid4())  # Assign a new unique ID to the cloned job
+    ###if next_beta update output path to include hash
     jobs = load_jobs(jobs_queue_file)
     
     original_index = jobs.index(job)  # Find the index of the original job
@@ -701,6 +649,9 @@ def batch_job(job):
             for path in selected_paths:
                 add_new_job = job.copy()  # Copy the existing job to preserve other attributes
                 add_new_job['id'] = str(uuid.uuid4())
+                    
+                ###if next_beta update output path to include hash
+
                 path = copy_to_media_cache(path)
                 add_new_job[source_or_target + 'cache'] = path
                 debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
@@ -767,16 +718,16 @@ def update_job_listbox():
                 if job['status'] == 'pending':
                     bg_color = 'SystemButtonFace'
                 if not job['status'] == 'completed':
-                    job_id = job['id']
+                    job_id_hash = job['id']
                     if not source_mediacache_exists:
                         debug_print(f"source mediacache {source_cache_path} is missing ")
                         job['status'] = 'missing'
-                        remove_old_grid(job_id, 'source')
+                        remove_old_grid(job_id_hash, 'source')
                         bg_color = 'red'
                     if not target_mediacache_exists:
                         debug_print(f"target mediacache {target_cache_path} is missing ")
                         job['status'] = 'missing'
-                        remove_old_grid(job_id, 'target')
+                        remove_old_grid(job_id_hash, 'target')
                         bg_color = 'red'
                 if job['status'] == 'archived':
                     bg_color = 'brown'
@@ -795,8 +746,8 @@ def update_job_listbox():
 
                 source_frame = tk.Frame(job_frame)
                 source_frame.pack(side='left', fill='x', padx=5)
-                job_id = job['id']
-                source_thumbnail_path = os.path.join(thumbnail_dir, f"source_grid_{job_id}.png")
+                job_id_hash = job['id']
+                source_thumbnail_path = os.path.join(thumbnail_dir, f"source_grid_{job_id_hash}.png")
 
                 if os.path.exists(source_thumbnail_path):
                     source_photo_image = PhotoImage(file=source_thumbnail_path)
@@ -837,7 +788,7 @@ def update_job_listbox():
                 target_frame = tk.Frame(job_frame)
                 target_frame.pack(side='left', fill='x', padx=5)
 
-                target_thumbnail_path = os.path.join(thumbnail_dir, f"target_grid_{job_id}.png")
+                target_thumbnail_path = os.path.join(thumbnail_dir, f"target_grid_{job_id_hash}.png")
                 if os.path.exists(target_thumbnail_path):
                     target_photo_image = PhotoImage(file=target_thumbnail_path)
                     target_button = Button(target_frame, image=target_photo_image, command=lambda ft='target', j=job: select_job_file(target_frame, j, ft))
@@ -894,16 +845,16 @@ def jobs_to_delete(jobstatus):
     jobs = load_jobs(jobs_queue_file)
     for job in jobs:
         if job['status'] == jobstatus:
-            job_id = job['id']
-            remove_old_grid(job_id, source_or_target = 'source')
-            remove_old_grid(job_id, source_or_target = 'target')
+            job_id_hash = job['id']
+            remove_old_grid(job_id_hash, source_or_target = 'source')
+            remove_old_grid(job_id_hash, source_or_target = 'target')
     jobs = [job for job in jobs if job['status'] != jobstatus]
     save_jobs(jobs_queue_file, jobs)
     if edit_queue_running:
         refresh_frame_listbox()
     
-def remove_old_grid(job_id, source_or_target):
-    image_ref_key = f"{source_or_target}_grid_{job_id}.png"
+def remove_old_grid(job_id_hash, source_or_target):
+    image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
     grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
     if os.path.exists(grid_thumb_path):
         os.remove(grid_thumb_path)
@@ -963,12 +914,12 @@ def output_path_job(job):
 
 def delete_job(job):
     job['status'] = ('deleting')
-    job_id = job['id']
+    job_id_hash = job['id']
     check_if_needed(job, 'both')
     jobs.remove(job)
     save_jobs(jobs_queue_file, jobs)
-    remove_old_grid(job_id, source_or_target = 'source')
-    remove_old_grid(job_id, source_or_target = 'target')
+    remove_old_grid(job_id_hash, source_or_target = 'source')
+    remove_old_grid(job_id_hash, source_or_target = 'target')
     refresh_frame_listbox()
 
 
@@ -996,11 +947,12 @@ def move_job_to_bottom(index):
         save_jobs(jobs_queue_file, jobs)
         update_job_listbox()
 
+
 def edit_job_arguments_text(job):
     global default_values
     job_args = job.get('job_args', '')
     edit_arg_window = tk.Toplevel()
-    edit_arg_window.title("Edit Job Arguments   - tip greyed out values are defaults and will be used if needed, uncheck any argument to restore it to the default value")
+    edit_arg_window.title("Edit Job Arguments - tip greyed out values are defaults and will be used if needed, uncheck any argument to restore it to the default value")
     edit_arg_window.geometry("1050x500")
     canvas = tk.Canvas(edit_arg_window)
     scrollable_frame = tk.Frame(canvas)
@@ -1039,22 +991,22 @@ def edit_job_arguments_text(job):
         entries[cli_arg] = entry
         checkboxes[cli_arg] = var
 
-        var.trace_add("write", lambda *args, var=var, entry=entry, value=current_value: update_entry(var, entry, value))
+        def update_entry(var=var, entry=entry, default_value=default_value, cli_arg=cli_arg):
+            if var.get():
+                entry.config(state=tk.NORMAL)
+                debug_print(f"Checkbox checked: {cli_arg}, Current value: {entry.get()}")
+            else:
+                entry.config(state=tk.DISABLED)
+                entry.delete(0, tk.END)
+                entry.insert(0, str(default_value))
+                debug_print(f"Checkbox unchecked: {cli_arg}, Default value: {default_value}")
+
+        var.trace_add("write", lambda *args, var=var, entry=entry, default_value=default_value, cli_arg=cli_arg: update_entry(var, entry, default_value, cli_arg))
         row += 1
         if row >= 17:
             row = 0
             col += 1
 
-    def update_entry(var, entry, value):
-        if var.get():
-            entry.config(state=tk.NORMAL)
-            entry.delete(0, tk.END)
-            entry.insert(0, value)
-        else:
-            entry.config(state=tk.DISABLED)
-            entry.delete(0, tk.END)
-            
-                    
     def save_changes():
         new_job_args = []
         for arg, var in checkboxes.items():
@@ -1062,6 +1014,7 @@ def edit_job_arguments_text(job):
                 entry_text = entries[arg].get().strip()
                 if entry_text:
                     new_job_args.append(f"{arg} {entry_text}")
+                    debug_print(f"Saving argument: {arg}, Value: {entry_text}")
 
         job['job_args'] = ' '.join(new_job_args)
         debug_print("Updated Job Args:", job['job_args'])
@@ -1090,11 +1043,10 @@ def edit_job_arguments_text(job):
 
     scrollable_frame.update_idletasks()
     canvas.configure(scrollregion=canvas.bbox("all"))
-    edit_arg_window.mainloop()
-    
+    edit_arg_window.mainloop()   
     
 def select_job_file(parent, job, source_or_target):
-    job_id = job['id']
+    job_id_hash = job['id']
     file_types = []
     if source_or_target == 'source':
         file_types = [('source files', '*.jpg *.jpeg *.png *.webp *.mp3 *.wav *.aac')]
@@ -1112,7 +1064,7 @@ def select_job_file(parent, job, source_or_target):
         selected_paths = [selected_path] if selected_path else []
 
     if selected_paths:
-        remove_old_grid(job_id, source_or_target)
+        remove_old_grid(job_id_hash, source_or_target)
         check_if_needed(job, source_or_target)
         update_paths(job, selected_paths, source_or_target)
         
@@ -1130,8 +1082,8 @@ def select_job_file(parent, job, source_or_target):
         refresh_frame_listbox()
 
 def create_job_thumbnail(parent, job, source_or_target):
-    job_id = job['id']
-    image_ref_key = f"{source_or_target}_grid_{job_id}.png"
+    job_id_hash = job['id']
+    image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
     grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
     if not os.path.exists(thumbnail_dir):
         os.makedirs(thumbnail_dir)
@@ -1158,7 +1110,7 @@ def create_job_thumbnail(parent, job, source_or_target):
 
     thumbnail_files = []
     for idx, file_path in enumerate(file_paths):
-        thumbnail_path = os.path.join(thumbnail_dir, f"{source_or_target}_thumb_{job_id}_{idx}.png")
+        thumbnail_path = os.path.join(thumbnail_dir, f"{source_or_target}_thumb_{job_id_hash}_{idx}.png")
         if file_path.lower().endswith(('.mp3', '.wav', '.aac', '.flac')):
             audio_icon_path = os.path.join(working_dir, 'audioicon.png')
             cmd = [
@@ -1197,12 +1149,12 @@ def create_job_thumbnail(parent, job, source_or_target):
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         thumbnail_files.append(thumbnail_path)
 
-    list_file_path = os.path.join(thumbnail_dir, f'{job_id}_input_list.txt')
+    list_file_path = os.path.join(thumbnail_dir, f'{job_id_hash}_input_list.txt')
     with open(list_file_path, 'w') as file:
         for thumb in thumbnail_files:
             file.write(f"file '{thumb}'\n")
 
-    grid_thumb_path = os.path.join(thumbnail_dir, f"{source_or_target}_grid_{job_id}.png")
+    grid_thumb_path = os.path.join(thumbnail_dir, f"{source_or_target}_grid_{job_id_hash}.png")
     grid_cmd = [
         'ffmpeg',
         '-loglevel', 'error',
@@ -1612,6 +1564,10 @@ def sanitize_filename(filename):
 
 
 def copy_to_media_cache(file_paths):
+    if not os.path.exists(working_dir):
+        os.makedirs(working_dir)
+    if not os.path.exists(media_cache_dir):
+        os.makedirs(media_cache_dir)
     if isinstance(file_paths, str):
         file_paths = [file_paths]  # Convert single file path to list
     cached_paths = []
@@ -1643,6 +1599,11 @@ def copy_to_media_cache(file_paths):
         
         
 def check_for_unneeded_media_cache():
+    if not os.path.exists(working_dir):
+        os.makedirs(working_dir)
+    if not os.path.exists(media_cache_dir):
+        os.makedirs(media_cache_dir)
+
     # List all files in the media cache directory
     cache_files = os.listdir(media_cache_dir)
     jobs = load_jobs(jobs_queue_file)
@@ -1664,6 +1625,11 @@ def check_for_unneeded_media_cache():
 
 
 def check_if_needed(job, source_or_target):
+    if not os.path.exists(working_dir):
+        os.makedirs(working_dir)
+    if not os.path.exists(media_cache_dir):
+        os.makedirs(media_cache_dir)
+
     with open(jobs_queue_file, 'r') as file:
         jobs = json.load(file)
 
@@ -1725,17 +1691,16 @@ def preprocess_execution_providers(data):
         if key == "execution_providers":
             new_providers = []
             for provider in value:
-                if provider == "CUDAExecutionProvider":
+                if provider == "cuda" or provider == "CUDAExecutionProvider":
                     new_providers.append('cuda')
-                elif provider == "CPUExecutionProvider":
+                elif provider == "cpu" or provider == "CPUExecutionProvider":
                     new_providers.append('cpu')
-                elif provider == "CoreMLExecutionProvider":
+                elif provider == "coreml" or provider == "CoreMLExecutionProvider":
                     new_providers.append('coreml')
                 # Assuming you don't want to keep original values that don't match, skip the else clause
             new_data[key] = new_providers  # Replace the old list with the new one
     return new_data
 ##
-
 
 ##
 #startup_init_checks_and_cleanup, Globals and toggles
@@ -1753,19 +1718,23 @@ if not os.path.exists(media_cache_dir):
     os.makedirs(media_cache_dir)
 STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
-#code to determin if running inside atutomatic1111
-automatic1111 = os.path.isfile(os.path.join(base_dir, "flavor.txt")) and "automatic1111" in open(os.path.join(base_dir, "flavor.txt")).readline().strip()
-
+    # ANSI Color Codes     
+RED = '\033[91m'     #use this  
+GREEN = '\033[92m'     #use this  
+YELLOW = '\033[93m'     #use this  
+BLUE = '\033[94m'     #use this  
+ENDC = '\033[0m'       #use this    Resets color to default
+version = facefusion.metadata.get('version')
+queueitup_version = '2.6.9.1'
+print(f"{BLUE}FaceFusion version: {GREEN}{version}{ENDC}")
+print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
+automatic1111 = "AUTOMATIC1111" in version
+next_beta = "NEXT" in version
 if not automatic1111:
     default_values = get_values_from_globals("default_values")  
     settings_path = default_values.get("config_path", "")
     
-    # settings_path = default_values.get("config_path", "")
-    # default_values = get_values_from_globals("default_values")  
-
-
 if automatic1111:
-    print("QueueItUp has detected: automatic1111")
     import facefusion.core2 as core2
     venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
     settings_path = os.path.join(base_dir, "facefusion.ini")
@@ -1797,12 +1766,7 @@ root = None
 pending_jobs_var = None
 
         
-    # ANSI Color Codes     
-RED = '\033[91m'     #use this  
-GREEN = '\033[92m'     #use this  
-YELLOW = '\033[93m'     #use this  
-BLUE = '\033[94m'     #use this  
-ENDC = '\033[0m'       #use this    Resets color to default
+
 gradio_version = pkg_resources.get_distribution("gradio").version
 debug_print(f"gradio version: {gradio_version}")
 debug_print("FaceFusion Base Directory:", base_dir)
@@ -1821,12 +1785,3 @@ debug_print(f"{YELLOW}QueueItUp is Checking Status{ENDC}\n")
 
 check_for_completed_failed_or_aborted_jobs()
 debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
-# def install_package(package):
-    # subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-# try:
-    # import moviepy
-# except ImportError:
-    # print("moviepy is not installed. Installing now...")
-    # install_package("moviepy")
-    # import moviepy
