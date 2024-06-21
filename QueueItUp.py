@@ -363,12 +363,16 @@ def execute_jobs():
 # Initialize the setini variable in the global scope
 setini = None
 
+
 def load_settings():
     config = configparser.ConfigParser()
     if not os.path.exists(settings_path):
         config['QueueItUp'] = {
             'debugging': 'True',
             'keep_completed_jobs': 'True'
+        }
+        config['misc'] = {
+            'log_level': 'debug'
         }
         with open(settings_path, 'w') as configfile:
             config.write(configfile)
@@ -380,9 +384,16 @@ def load_settings():
         }
         with open(settings_path, 'w') as configfile:
             config.write(configfile)
+    if 'misc' not in config.sections():
+        config['misc'] = {
+            'log_level': 'debug'
+        }
+        with open(settings_path, 'w') as configfile:
+            config.write(configfile)
     settings = {
         'debugging': config.getboolean('QueueItUp', 'debugging'),
-        'keep_completed_jobs': config.getboolean('QueueItUp', 'keep_completed_jobs')
+        'keep_completed_jobs': config.getboolean('QueueItUp', 'keep_completed_jobs'),
+        'log_level': config.get('misc', 'log_level')
     }
     return settings
 
@@ -391,8 +402,11 @@ def save_settings(settings):
     config.read(settings_path)
     if 'QueueItUp' not in config.sections():
         config.add_section('QueueItUp')
+    if 'misc' not in config.sections():
+        config.add_section('misc')
     config.set('QueueItUp', 'debugging', str(settings['debugging']))
     config.set('QueueItUp', 'keep_completed_jobs', str(settings['keep_completed_jobs']))
+    config.set('misc', 'log_level', settings['log_level'])
     with open(settings_path, 'w') as configfile:
         config.write(configfile)
 
@@ -412,6 +426,7 @@ def queueitup_settings():
         def save_and_close():
             global setini
             settings['debugging'] = debugging_var.get()
+            settings['log_level'] = 'debug' if settings['debugging'] else 'info'
             settings['keep_completed_jobs'] = keep_completed_jobs_var.get()
             save_settings(settings)
             initialize_settings()
@@ -480,6 +495,9 @@ def queueitup_settings():
         root.after(0, create_settings_window)
     else:
         create_settings_window()
+
+
+
 def edit_queue_window():
     global root, edit_queue_running
     try:
