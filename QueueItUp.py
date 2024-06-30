@@ -25,7 +25,7 @@ except ImportError:
 
 import pkg_resources
 facefusion_version = facefusion.metadata.get('version')
-queueitup_version = '2.6.9.1'
+queueitup_version = '2.7 RC2 Next and 2.6.1 compatable'
 automatic1111 = "AUTOMATIC1111" in facefusion_version
 
 def is_version_valid(version_str):
