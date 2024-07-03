@@ -1,4 +1,4 @@
- **QueueItUp 2.6.9.1** Now with added clone it and BatchItUp feature
+ **QueueItUp 2.6.11** Now with added clone it and BatchItUp feature
  
 <img width="1679" alt="Screenshot 2024-05-09 110834" src="https://github.com/chuckkay/QueueItUp/assets/10617746/ebf49e9b-04f6-4373-9c33-636dd43e23da">
 
