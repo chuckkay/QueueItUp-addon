@@ -1,4 +1,4 @@
-import gradio as gr
+import gradio
 import os
 import re
 import sys
@@ -15,7 +15,10 @@ from packaging import version
 from packaging.version import InvalidVersion
 import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
-import facefusion.globals
+from facefusion import metadata
+from facefusion.processors.frame import choices as frame_processors_choices
+from facefusion import choices as ff_choices
+
 from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
 try:
 	from facefusion.uis.components import target_options
@@ -24,24 +27,29 @@ except ImportError:
 	yt_addon = False
 
 import pkg_resources
-facefusion_version = facefusion.metadata.get('version')
-queueitup_version = '2.6.11  2.5.1-2.6.2 compatable pre jobs'
+facefusion_version = metadata.get('version')
+queueitup_version = '2.6.11 --->  is  2.5.1-2.6.2 compatable pre jobs'
 automatic1111 = "AUTOMATIC1111" in facefusion_version
 
 def is_version_valid(version_str):
-    if version_str == "NEXT":
-        return True
-    try:
-        parsed_version = version.parse(version_str)
-        return parsed_version >= version.parse("2.7")
-    except InvalidVersion:
-        return False
+	if version_str == "NEXT":
+		return True
+	try:
+		parsed_version = version.parse(version_str)
+		return parsed_version >= version.parse("2.7")
+	except InvalidVersion:
+		return False
 FF_Does_Jobs = is_version_valid(facefusion_version)
 print(f"FF_Does_Jobs: {FF_Does_Jobs}")
 if FF_Does_Jobs:
 	from facefusion.core import process_step
 	from facefusion.jobs import job_runner, job_store, job_helper
 	from facefusion.jobs.job_runner import run_job, run_jobs, run_steps, finalize_steps, collect_output_set
+	import facefusion.state_manager as state_manager
+	from facefusion.uis.components import instant_runner, job_manager, job_runner, ui_workflow
+else:
+	import facefusion.globals
+	from facefusion.processors.frame import globals as frame_processors_globals
 
 def pre_check() -> bool:
 	return True
@@ -51,59 +59,64 @@ def pre_render() -> bool:
 	return True
 
 
-def render() -> gr.Blocks:
+def render() -> gradio.Blocks:
 	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW, SETTINGS_BUTTON
-	with gr.Blocks() as layout:
-		with gr.Row():
-			with gr.Column(scale = 2):
-				with gr.Blocks():
+	with gradio.Blocks() as layout:
+		with gradio.Row():
+			with gradio.Column(scale = 2):
+				with gradio.Blocks():
 					about.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					frame_processors.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					frame_processors_options.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					execution.render()
 					execution_thread_count.render()
 					execution_queue_count.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					memory.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					temp_frame.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					output_options.render()
-			with gr.Column(scale = 2):
-				with gr.Blocks():
+			with gradio.Column(scale = 2):
+				with gradio.Blocks():
 					source.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					target.render()
 				if yt_addon:
-					with gr.Blocks():
+					with gradio.Blocks():
 						target_options.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					output.render()
-				with gr.Blocks():
+					if FF_Does_Jobs:
+						ui_workflow.render()
+						instant_runner.render()
+						job_runner.render()
+						job_manager.render()
+				with gradio.Blocks():
 					STATUS_WINDOW.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					ADD_JOB_BUTTON.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					RUN_JOBS_BUTTON.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					EDIT_JOB_BUTTON.render()
-				# with gr.Blocks():
+				# with gradio.Blocks():
 					# SETTINGS_BUTTON.render()
-			with gr.Column(scale = 3):
-				with gr.Blocks():
+			with gradio.Column(scale = 3):
+				with gradio.Blocks():
 					preview.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					trim_frame.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					face_selector.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					face_masker.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					face_analyser.render()
-				with gr.Blocks():
+				with gradio.Blocks():
 					common_options.render()
 	return layout
 
@@ -127,6 +140,11 @@ def listen() -> None:
 	if yt_addon:
 		target_options.listen()
 	output.listen()
+	if FF_Does_Jobs:
+		ui_workflow.listen()
+		instant_runner.listen()
+		job_runner.listen()
+		job_manager.listen()
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
@@ -136,57 +154,40 @@ def listen() -> None:
 
 
 
-def run(ui : gr.Blocks) -> None:
+def run(ui : gradio.Blocks) -> None:
+	if FF_Does_Jobs:			
+		ui.launch(show_api = False, inbrowser = state_manager.get_item('open_browser'))
+			#ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
+	else:
+		if not automatic1111:
+			ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
 	if automatic1111:
 		import multiprocessing
-
 		concurrency_count = min(8, multiprocessing.cpu_count())
-		ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True)			 
-			
-	else:
-		ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
-			#ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
-		
+		ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = True)
 	
 def assemble_queue():
 	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
 	missing_paths = []
-
-	if not facefusion.globals.target_path:
-		missing_paths.append("target path")
-	if not facefusion.globals.output_path:
-		missing_paths.append("output path")
-
+	if FF_Does_Jobs:
+		if not state_manager.get_item('target_path'):
+			missing_paths.append("target path")
+		if not state_manager.get_item('output_path'):
+			missing_paths.append("output path")
+	if not FF_Does_Jobs:
+		if not facefusion.globals.target_path:
+			missing_paths.append("target path")
+		if not facefusion.globals.output_path:
+			missing_paths.append("output path")
 	if missing_paths:
 		whats_missing = ", ".join(missing_paths)
 		custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}\n\n")
 		return STATUS_WINDOW.value
-
-	current_values = get_values_from_globals('current_values')
+	current_values = get_values_from_FF('current_values')
 
 	differences = {}
 	keys_to_skip = ["source_paths", "target_path", "output_path", "output_dir", "output_hash", "ui_layouts", "face_recognizer_model", "headless"]
-	### is this still needed?
-	# if "frame_processors" in current_values:
-		# frame_processors = current_values["frame_processors"]
-		# if "face_enhancer" not in frame_processors:
-			# keys_to_skip.append("face_enhancer_model")
-		# if "frame_enhancer" not in frame_processors:
-			# keys_to_skip.append("frame_enhancer_blend")
-		# if "face_swapper" not in frame_processors:
-			# keys_to_skip.append("face_swapper_model")
-		# if "face_debugger" not in frame_processors:
-			# keys_to_skip.append("face_debugger_items")
-		# if "frame_colorizer" not in frame_processors:
-			# keys_to_skip.append("frame_colorizer_model")
-		# if "frame_colorizer" not in frame_processors:
-			# keys_to_skip.append("frame_colorizer_size")
-		# if "frame_colorizer" not in frame_processors:
-			# keys_to_skip.append("frame_colorizer_blend")
-		# if "lip_syncer" not in frame_processors:
-			# keys_to_skip.append("lip_syncer_model")
-			
-	# Compare current_values against default_values and record only changed current values
+
 	for key, current_value in current_values.items():
 		if key in keys_to_skip:
 			continue  # Skip these keys
@@ -280,15 +281,6 @@ def assemble_queue():
 		with open(os.path.join(working_dir, "job_args_values.txt"), "w") as file:
 			for key, val in current_values.items():
 				file.write(f"{key}: {val}\n")
-
-	# if found_editing:
-		# if not (oldeditjob['sourcecache'] == new_job['sourcecache'] or oldeditjob['sourcecache'] == new_job['targetcache']):
-			# check_if_needed(oldeditjob, 'source')
-		# if not (oldeditjob['targetcache'] == new_job['sourcecache'] or oldeditjob['targetcache'] == new_job['targetcache']):
-			# check_if_needed(oldeditjob, 'target')
-		# job.update(new_job)
-		# save_jobs(jobs_queue_file, jobs)
-		# custom_print(f"{GREEN}You have successfully returned the Edited job back to the job Queue, it is now a Pending Job {ENDC}")
 
 	if not found_editing:
 		jobs.append(new_job)
@@ -1557,28 +1549,36 @@ def get_vid_length(total_seconds):
 		video_length = "Unknown duration"
 	return video_length
 
-	
-def get_values_from_globals(state_name):
+def get_values_from_FF(state_name):
+
 	state_dict = {}
 	frame_processors_choices_dict = {}
 	ff_choices_dict = {}
-	import facefusion.choices
-	from facefusion.processors.frame import globals as frame_processors_globals, choices as frame_processors_choices
-	from facefusion import choices as ff_choices
 
-	imp_current_values = [facefusion.globals, frame_processors_globals]
+	if FF_Does_Jobs:
+		# Get the state context and state dictionary
+		state_context = state_manager.detect_state_context()
+		state = state_manager.STATES[state_context]
+
+		# Process state dictionary
+		for key, value in state.items():
+			try:
+				json.dumps(value)  # Check if the value is JSON serializable
+				state_dict[key] = value	 # Store or update the value in the dictionary
+			except TypeError:
+				continue  # Skip values that are not JSON serializable
+	else:
+		imp_current_values = [facefusion.globals, frame_processors_globals]
+		for imp_current_value in imp_current_values:
+			for attr in dir(imp_current_value):
+				if not attr.startswith("__"):
+					value = getattr(imp_current_value, attr)
+					try:
+						json.dumps(value)  # Check if the value is JSON serializable
+						state_dict[attr] = value  # Store or update the value in the dictionary
+					except TypeError:
+						continue  # Skip values that are not JSON serializable
 	other_choices = [frame_processors_choices, ff_choices]
-
-	for imp_current_value in imp_current_values:
-		for attr in dir(imp_current_value):
-			if not attr.startswith("__"):
-				value = getattr(imp_current_value, attr)
-				try:
-					json.dumps(value)  # Check if the value is JSON serializable
-					state_dict[attr] = value  # Store or update the value in the dictionary
-				except TypeError:
-					continue  # Skip values that are not JSON serializable
-
 	for other_choice in other_choices:
 		other_choice_dict = {}
 		for attr in dir(other_choice):
@@ -1881,7 +1881,7 @@ if not os.path.exists(working_dir):
 	os.makedirs(working_dir)
 if not os.path.exists(media_cache_dir):
 	os.makedirs(media_cache_dir)
-STATUS_WINDOW = gr.Textbox(label="Job Status", interactive=True)
+STATUS_WINDOW = gradio.Textbox(label="Job Status", interactive=True)
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
 	# ANSI Color Codes	   
 RED = '\033[91m'	 #use this	
@@ -1894,7 +1894,7 @@ print(f"{BLUE}FaceFusion version: {GREEN}{facefusion_version}{ENDC}")
 print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
 
 if not automatic1111:
-	default_values = get_values_from_globals("default_values")	
+	default_values = get_values_from_FF("default_values")	
 	settings_path = default_values.get("config_path", "")
 	
 if automatic1111:
@@ -1910,10 +1910,10 @@ create_and_verify_json(jobs_queue_file)
 
 thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
 
-ADD_JOB_BUTTON = gr.Button("Add Job ", variant="primary")
-RUN_JOBS_BUTTON = gr.Button("Run Jobs", variant="primary")
-EDIT_JOB_BUTTON = gr.Button("Edit Jobs")
-SETTINGS_BUTTON = gr.Button("Change Settings")
+ADD_JOB_BUTTON = gradio.Button("Add Job ", variant="primary")
+RUN_JOBS_BUTTON = gradio.Button("Run Jobs", variant="primary")
+EDIT_JOB_BUTTON = gradio.Button("Edit Jobs")
+SETTINGS_BUTTON = gradio.Button("Change Settings")
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
 CURRENT_JOB_NUMBER = 0
