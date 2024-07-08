@@ -18,8 +18,8 @@ from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollba
 from facefusion import metadata
 from facefusion.processors.frame import choices as frame_processors_choices
 from facefusion import choices as ff_choices
+from facefusion.uis.components import about, common_options, execution, execution_queue_count, execution_thread_count, face_analyser, face_masker, face_selector, frame_processors, frame_processors_options, memory, output, output_options, preview, source, target, temp_frame, trim_frame
 
-from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, memory, temp_frame, output_options, common_options, source, target, output, preview, trim_frame, face_analyser, face_selector, face_masker
 try:
 	from facefusion.uis.components import target_options
 	yt_addon = True
@@ -42,11 +42,11 @@ def is_version_valid(version_str):
 FF_Does_Jobs = is_version_valid(facefusion_version)
 print(f"FF_Does_Jobs: {FF_Does_Jobs}")
 if FF_Does_Jobs:
-	from facefusion.core import process_step
-	from facefusion.jobs import job_runner, job_store, job_helper
-	from facefusion.jobs.job_runner import run_job, run_jobs, run_steps, finalize_steps, collect_output_set
-	import facefusion.state_manager as state_manager
+	from facefusion import state_manager
 	from facefusion.uis.components import instant_runner, job_manager, job_runner, ui_workflow
+	# from facefusion.core import process_step
+	from facefusion.jobs.job_runner import run_job, run_jobs, run_steps, finalize_steps, collect_output_set
+	# import facefusion.state_manager as state_manager
 else:
 	import facefusion.globals
 	from facefusion.processors.frame import globals as frame_processors_globals
@@ -227,16 +227,20 @@ def assemble_queue():
 			oldeditjob = job.copy()	 
 			found_editing = True
 			break
-	if not source_paths == None:
+	if source_paths is not None:
 		cache_source_paths = copy_to_media_cache(source_paths)
-		source_basenames = [os.path.basename(path) for path in cache_source_paths] if isinstance(cache_source_paths, list) else os.path.basename(cache_source_paths)
+		if isinstance(cache_source_paths, list):
+			source_basenames = [os.path.basename(path) for path in cache_source_paths]
+			source_name, _ = os.path.splitext(source_basenames[0])	# Take the first path's basename without extension
+		else:
+			source_basenames = os.path.basename(cache_source_paths)
+			source_name, _ = os.path.splitext(source_basenames)	 # Handle single path correctly
 		debug_print(f"{GREEN}Source file{ENDC} copied to Media Cache folder: {GREEN}{source_basenames}{ENDC}\n\n")
+
 	cache_target_path = copy_to_media_cache(target_path)
-	debug_print(f"{GREEN}Target file{ENDC} copied to Media Cache folder: {GREEN}{os.path.basename(cache_target_path)}{ENDC}\n\n")
+
 	output_hash = str(uuid.uuid4())[:8]
-	if not source_paths == None:
-		source_name, _ = os.path.splitext(source_basenames[0])
-	target_name, target_extension  = os.path.splitext(os.path.basename(cache_target_path))
+	target_name, target_extension = os.path.splitext(os.path.basename(cache_target_path))
 	output_extension = target_extension
 
 	if source_paths:
