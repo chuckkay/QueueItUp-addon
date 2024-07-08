@@ -1331,13 +1331,13 @@ def RUN_job_args(current_run_job):
 		simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
 		simulated_cmd = simulated_args.replace('\\\\', '\\')
 
-		debug_print (f"{YELLOW}--job-create {current_run_job['id']}")
+		# debug_print (f"{YELLOW}--job-create {current_run_job['id']}")
 		process = subprocess.Popen(f"python run.py --job-create {current_run_job['id']}")	
 		process.wait()	# Wait for process to complete
-		debug_print (f"{BLUE}python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")
+		# debug_print (f"{BLUE}python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")
 		process = subprocess.Popen(f"python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
 		process.wait()	# Wait for process to complete
-		debug_print (f"{BLUE}python run.py --job-submit {current_run_job['id']}")
+		# debug_print (f"{BLUE}python run.py --job-submit {current_run_job['id']}")
 		process = subprocess.Popen(
 			f"python run.py --job-submit {current_run_job['id']}",
 			shell=True,
@@ -1346,7 +1346,7 @@ def RUN_job_args(current_run_job):
 			text=True,
 			bufsize=1  # Line-buffered		  
 		)		 
-		debug_print (f"{BLUE}python run.py --job-run {current_run_job['id']}")
+		#debug_print (f"{BLUE}python run.py --job-run {current_run_job['id']}")
 		process = subprocess.Popen(
 			f"python run.py --job-run {current_run_job['id']}",
 			shell=True,
