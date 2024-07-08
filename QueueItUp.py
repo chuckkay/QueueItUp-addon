@@ -80,6 +80,16 @@ def render() -> gradio.Blocks:
 					temp_frame.render()
 				with gradio.Blocks():
 					output_options.render()
+				with gradio.Blocks():
+					STATUS_WINDOW.render()
+				with gradio.Blocks():
+					ADD_JOB_BUTTON.render()
+				with gradio.Blocks():
+					RUN_JOBS_BUTTON.render()
+				with gradio.Blocks():
+					EDIT_JOB_BUTTON.render()
+				# with gradio.Blocks():
+					# SETTINGS_BUTTON.render()	
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					source.render()
@@ -95,16 +105,6 @@ def render() -> gradio.Blocks:
 						instant_runner.render()
 						job_runner.render()
 						job_manager.render()
-				with gradio.Blocks():
-					STATUS_WINDOW.render()
-				with gradio.Blocks():
-					ADD_JOB_BUTTON.render()
-				with gradio.Blocks():
-					RUN_JOBS_BUTTON.render()
-				with gradio.Blocks():
-					EDIT_JOB_BUTTON.render()
-				# with gradio.Blocks():
-					# SETTINGS_BUTTON.render()
 			with gradio.Column(scale = 3):
 				with gradio.Blocks():
 					preview.render()
@@ -203,22 +203,10 @@ def assemble_queue():
 			differences[key] = formatted_value
 
 
-	output_hash = str(uuid.uuid4())[:8]
 	output_path = current_values.get("output_path", "")
 	source_paths = current_values.get("source_paths", [])
-	if not source_paths == None:
-		source_name, _ = os.path.splitext(os.path.basename(source_paths[0]))
 	target_path = current_values.get("target_path", "")
-	target_name, target_extension  = os.path.splitext(os.path.basename(target_path))
-	output_extension = target_extension
 
-	if source_paths:
-		outputname = source_name + '-' + target_name
-	else:
-		outputname = target_name
-	queueitup_job_id = outputname + '-' + output_hash
-	full_output_path =	os.path.join(output_path, queueitup_job_id + output_extension)
-	
 	while True:
 		if JOB_IS_RUNNING:
 			if JOB_IS_EXECUTING:
@@ -245,7 +233,19 @@ def assemble_queue():
 		debug_print(f"{GREEN}Source file{ENDC} copied to Media Cache folder: {GREEN}{source_basenames}{ENDC}\n\n")
 	cache_target_path = copy_to_media_cache(target_path)
 	debug_print(f"{GREEN}Target file{ENDC} copied to Media Cache folder: {GREEN}{os.path.basename(cache_target_path)}{ENDC}\n\n")
+	output_hash = str(uuid.uuid4())[:8]
+	if not source_paths == None:
+		source_name, _ = os.path.splitext(source_basenames[0])
+	target_name, target_extension  = os.path.splitext(os.path.basename(cache_target_path))
+	output_extension = target_extension
 
+	if source_paths:
+		outputname = source_name + '-' + target_name
+	else:
+		outputname = target_name
+	queueitup_job_id = outputname + '-' + output_hash
+	full_output_path =	os.path.join(output_path, queueitup_job_id + output_extension)
+	
 	# Construct the arguments string
 	arguments = " ".join(f"--{key.replace('_', '-')} {value}" for key, value in differences.items() if value)
 	if debugging:
@@ -1032,7 +1032,7 @@ def edit_job_arguments_text(job):
 		arg, value = match.groups()
 		value = ' '.join(value.split())	 # Normalize spaces
 		job_args_dict[arg] = value
-	skip_keys = ['--source-paths', '--target-path', '--output-path', '--face-recognizer-model', '--ui-layouts', '--config-path', '--force-download', '--skip-download']
+	skip_keys = ['--source-paths', '--target-path', '--output-path', '--face-recognizer-model', '--ui-layouts', '--ui_workflow', '--config-path', '--force-download', '--skip-download']
 	for arg, default_value in default_values.items():
 		cli_arg = '--' + arg.replace('_', '-')
 		if cli_arg in skip_keys:
@@ -1327,17 +1327,17 @@ def RUN_job_args(current_run_job):
 
 	if FF_Does_Jobs:
 	
-		arg_output_path = f"-o \"{current_run_job['full_output_path']}\""
+		# arg_output_path = f"-o \"{current_run_job['full_output_path']}\""
 		simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
 		simulated_cmd = simulated_args.replace('\\\\', '\\')
 
 		debug_print (f"{YELLOW}--job-create {current_run_job['id']}")
 		process = subprocess.Popen(f"python run.py --job-create {current_run_job['id']}")	
 		process.wait()	# Wait for process to complete
-		#debug_print (f"{BLUE}python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")
+		debug_print (f"{BLUE}python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")
 		process = subprocess.Popen(f"python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
 		process.wait()	# Wait for process to complete
-		#debug_print (f"{BLUE}python run.py --job-submit {current_run_job['id']}")
+		debug_print (f"{BLUE}python run.py --job-submit {current_run_job['id']}")
 		process = subprocess.Popen(
 			f"python run.py --job-submit {current_run_job['id']}",
 			shell=True,
