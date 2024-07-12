@@ -1304,40 +1304,23 @@ def RUN_job_args(current_run_job):
 	debug_print (f"{YELLOW}--job-create {current_run_job['id']}")
 	process = subprocess.Popen(f"python run.py --job-create {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
-	#debug_print (f"{BLUE}python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")
 	process = subprocess.Popen(f"python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
 	process.wait()	# Wait for process to complete
 	process = subprocess.Popen(f"python run.py --job-submit {current_run_job['id']}")		 
-	#debug_print (f"{BLUE}python run.py --job-run {current_run_job['id']}")
 	process = subprocess.Popen(f"python run.py --job-run {current_run_job['id']}", stdout=subprocess.PIPE)
 	# process = run_job((current_run_job['id']), 'process_step')
-	# process.wait()	# Wait for process to complete
 
-	# while process_manager.is_processing():
-		# try:
-			# if state_manager.get_item('log_level') == 'debug':
-				# print("log_debug(process)")
-				# log_debug(process)
-			# process.wait(timeout = 0.5)
-		# except subprocess.TimeoutExpired:
-			# continue
-
-	# if process_manager.is_stopping():
-		# process.terminate()
 	process.wait()
 	
 	failed_path = os.path.join(state_manager.get_item('jobs_path'), 'failed', f"{current_run_job['id']}.json")
-
-	print(failed_path)
 	if os.path.exists(failed_path):
-		print ("failedfailedfailedfailedfailedfailed")
+		print (f"{RED}Job FAILED{ENDC}")
+		process = subprocess.Popen(f"python run.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
 		current_run_job['status'] = 'failed'
 	else:
 		current_run_job['status'] = 'completed'
-		print ("completedcompletedcompletedcompletedcompleted")
 
 		if not keep_completed_jobs: 
-			debug_print (f"{YELLOW}delete job")
 			process = subprocess.Popen(f"python run.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
 
 	return current_run_job
