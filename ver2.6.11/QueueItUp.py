@@ -19,6 +19,8 @@ from facefusion import metadata
 from facefusion.processors.frame import choices as frame_processors_choices
 from facefusion import choices as ff_choices
 from facefusion.uis.components import about, common_options, execution, execution_queue_count, execution_thread_count, face_analyser, face_masker, face_selector, frame_processors, frame_processors_options, memory, output, output_options, preview, source, target, temp_frame, trim_frame
+import facefusion.globals
+from facefusion.processors.frame import globals as frame_processors_globals
 
 try:
 	from facefusion.uis.components import target_options
@@ -26,30 +28,10 @@ try:
 except ImportError:
 	yt_addon = False
 
-import pkg_resources
 facefusion_version = metadata.get('version')
-queueitup_version = '2.6.11 --->  is  2.5.1-2.6.2 compatable pre jobs'
+queueitup_version = '2.6.11 --->  is  FACEFUSION 2.6.1 compatable '
 automatic1111 = "AUTOMATIC1111" in facefusion_version
 
-def is_version_valid(version_str):
-	if version_str == "NEXT":
-		return True
-	try:
-		parsed_version = version.parse(version_str)
-		return parsed_version >= version.parse("2.7")
-	except InvalidVersion:
-		return False
-FF_Does_Jobs = is_version_valid(facefusion_version)
-print(f"FF_Does_Jobs: {FF_Does_Jobs}")
-if FF_Does_Jobs:
-	from facefusion import state_manager
-	from facefusion.uis.components import instant_runner, job_manager, job_runner, ui_workflow
-	# from facefusion.core import process_step
-	from facefusion.jobs.job_runner import run_job, run_jobs, run_steps, finalize_steps, collect_output_set
-	# import facefusion.state_manager as state_manager
-else:
-	import facefusion.globals
-	from facefusion.processors.frame import globals as frame_processors_globals
 
 def pre_check() -> bool:
 	return True
@@ -79,17 +61,7 @@ def render() -> gradio.Blocks:
 				with gradio.Blocks():
 					temp_frame.render()
 				with gradio.Blocks():
-					output_options.render()
-				with gradio.Blocks():
-					STATUS_WINDOW.render()
-				with gradio.Blocks():
-					ADD_JOB_BUTTON.render()
-				with gradio.Blocks():
-					RUN_JOBS_BUTTON.render()
-				with gradio.Blocks():
-					EDIT_JOB_BUTTON.render()
-				# with gradio.Blocks():
-					# SETTINGS_BUTTON.render()	
+					output_options.render()	
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					source.render()
@@ -100,11 +72,11 @@ def render() -> gradio.Blocks:
 						target_options.render()
 				with gradio.Blocks():
 					output.render()
-					if FF_Does_Jobs:
-						ui_workflow.render()
-						instant_runner.render()
-						job_runner.render()
-						job_manager.render()
+				with gradio.Blocks():
+					STATUS_WINDOW.render()
+					ADD_JOB_BUTTON.render()
+					EDIT_JOB_BUTTON.render()
+					RUN_JOBS_BUTTON.render()
 			with gradio.Column(scale = 3):
 				with gradio.Blocks():
 					preview.render()
@@ -126,7 +98,6 @@ def listen() -> None:
 	ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
 	RUN_JOBS_BUTTON.click(execute_jobs)
 	EDIT_JOB_BUTTON.click(edit_queue_window, outputs=STATUS_WINDOW)
-	# SETTINGS_BUTTON.click(queueitup_settings)
 	frame_processors.listen()
 	frame_processors_options.listen()
 	execution.listen()
@@ -140,11 +111,6 @@ def listen() -> None:
 	if yt_addon:
 		target_options.listen()
 	output.listen()
-	if FF_Does_Jobs:
-		ui_workflow.listen()
-		instant_runner.listen()
-		job_runner.listen()
-		job_manager.listen()
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
@@ -155,11 +121,7 @@ def listen() -> None:
 
 
 def run(ui : gradio.Blocks) -> None:
-	if FF_Does_Jobs:			
-		ui.launch(show_api = False, inbrowser = state_manager.get_item('open_browser'))
-			#ui.queue(concurrency_count = concurrency_count).launch(show_api = False, quiet = False, inbrowser = facefusion.globals.open_browser, favicon_path="test.ico")
-	else:
-		if not automatic1111:
+	if not automatic1111:
 			ui.launch(show_api = False, inbrowser = facefusion.globals.open_browser)
 	if automatic1111:
 		import multiprocessing
@@ -169,16 +131,11 @@ def run(ui : gradio.Blocks) -> None:
 def assemble_queue():
 	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
 	missing_paths = []
-	if FF_Does_Jobs:
-		if not state_manager.get_item('target_path'):
-			missing_paths.append("target path")
-		if not state_manager.get_item('output_path'):
-			missing_paths.append("output path")
-	if not FF_Does_Jobs:
-		if not facefusion.globals.target_path:
-			missing_paths.append("target path")
-		if not facefusion.globals.output_path:
-			missing_paths.append("output path")
+
+	if not facefusion.globals.target_path:
+		missing_paths.append("target path")
+	if not facefusion.globals.output_path:
+		missing_paths.append("output path")
 	if missing_paths:
 		whats_missing = ", ".join(missing_paths)
 		custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}\n\n")
@@ -796,6 +753,13 @@ def update_job_listbox():
 						job['status'] = 'missing'
 						remove_old_grid(job_id_hash, 'target')
 						bg_color = 'red'
+				if job['status'] == 'missing':
+					if job['sourcecache'] and source_mediacache_exists and target_mediacache_exists:
+							job['status'] = 'pending'
+							bg_color = 'SystemButtonFace'
+					if not job['sourcecache'] and target_mediacache_exists:
+							job['status'] = 'pending'
+							bg_color = 'SystemButtonFace'
 				if job['status'] == 'archived':
 					bg_color = 'brown'
 				job_frame = tk.Frame(frame, borderwidth=2, relief='groove', background=bg_color)
@@ -1318,71 +1282,32 @@ def RUN_job_args(current_run_job):
 		else:
 			arg_source_paths = ""
 	arg_target_path = f"-t \"{current_run_job['targetcache']}\""
-	if FF_Does_Jobs:
-		clioutputname = current_run_job['full_output_path']
-	else:
-		clioutputname = current_run_job['output_path']
-
- 
+	clioutputname = current_run_job['output_path']
 	arg_output_path = f"-o \"{clioutputname}\""
 	simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
 	simulated_cmd = simulated_args.replace('\\\\', '\\')
 
+	if automatic1111:
 
-	if FF_Does_Jobs:
-	
-		# arg_output_path = f"-o \"{current_run_job['full_output_path']}\""
-		simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
-		simulated_cmd = simulated_args.replace('\\\\', '\\')
-
-		# debug_print (f"{YELLOW}--job-create {current_run_job['id']}")
-		process = subprocess.Popen(f"python run.py --job-create {current_run_job['id']}")	
-		process.wait()	# Wait for process to complete
-		# debug_print (f"{BLUE}python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")
-		process = subprocess.Popen(f"python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
-		process.wait()	# Wait for process to complete
-		# debug_print (f"{BLUE}python run.py --job-submit {current_run_job['id']}")
+		#debug_print (f"{venv_python} {base_dir}\\run2.py {simulated_cmd}")
 		process = subprocess.Popen(
-			f"python run.py --job-submit {current_run_job['id']}",
+			f"{venv_python} {base_dir}\\run2.py {simulated_cmd}",
 			shell=True,
 			stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE,
 			text=True,
-			bufsize=1  # Line-buffered		  
-		)		 
-		#debug_print (f"{BLUE}python run.py --job-run {current_run_job['id']}")
-		process = subprocess.Popen(
-			f"python run.py --job-run {current_run_job['id']}",
-			shell=True,
-			stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE,
-			text=True,
-			bufsize=1	 # Line-buffered
-		)	
-
-		# job_runner.run_job(queueitup_job_id, process_step)
+			bufsize=1  # Line-buffered
+		)
 	else:
-		if automatic1111:
-
-			#debug_print (f"{venv_python} {base_dir}\\run2.py {simulated_cmd}")
-			process = subprocess.Popen(
-				f"{venv_python} {base_dir}\\run2.py {simulated_cmd}",
-				shell=True,
-				stdout=subprocess.PIPE,
-				stderr=subprocess.PIPE,
-				text=True,
-				bufsize=1  # Line-buffered
-			)
-		else:
-			#debug_print(f"{BLUE}python run.py {simulated_cmd}")
-			process = subprocess.Popen(
-				f"python run.py {simulated_cmd}",
-				shell=True,
-				stdout=subprocess.PIPE,
-				stderr=subprocess.PIPE,
-				text=True,
-				bufsize=1  # Line-buffered
-			)
+		#debug_print(f"{BLUE}python run.py {simulated_cmd}")
+		process = subprocess.Popen(
+			f"python run.py {simulated_cmd}",
+			shell=True,
+			stdout=subprocess.PIPE,
+			stderr=subprocess.PIPE,
+			text=True,
+			bufsize=1  # Line-buffered
+		)
 
 	# process.wait()	# Wait for process to complete
 	stdout_lines = []
@@ -1397,7 +1322,7 @@ def RUN_job_args(current_run_job):
 			if line:
 				lines.append(line)
 				label = f"{BLUE}Job# {CURRENT_JOB_NUMBER}{ENDC}"
-				if line.startswith("Processing:") or line.startswith("Analysing:"):
+				if line.startswith("Processing") or line.startswith("Analysing") or line.startswith("Merging video") or line.startswith("Extracting frames"):
 					print(f"\r{label}: {GREEN}{line.strip()[:100]}{ENDC}", end='', flush=True)
 					previous_line_was_progress = True
 				else:
@@ -1428,31 +1353,10 @@ def RUN_job_args(current_run_job):
 		return_code = 1
 	elif return_code == 0:
 		current_run_job['status'] = 'completed'
-		if FF_Does_Jobs:
-			debug_print (f"{YELLOW}delete job")
-			process = subprocess.Popen(
-				f"python run.py --job-delete {current_run_job['id']}",
-				shell=True,
-				stdout=subprocess.PIPE,
-				stderr=subprocess.PIPE,
-				text=True,
-				bufsize=1  # Line-buffered
-			)
+
 	else:
 		current_run_job['status'] = 'failed'
-		# if debugging:
-			# with open(os.path.join(working_dir, "Error-{current_run_job['id']}.txt"), 'w') as f:
-				# f.write(stderr)
-		if FF_Does_Jobs:
-			debug_print (f"{YELLOW}delete job")
-			process = subprocess.Popen(
-				f"python run.py --job-delete {current_run_job['id']}",
-				shell=True,
-				stdout=subprocess.PIPE,
-				stderr=subprocess.PIPE,
-				text=True,
-				bufsize=1	 # Line-buffered
-			)
+
 	return current_run_job
 
 
@@ -1559,29 +1463,17 @@ def get_values_from_FF(state_name):
 	frame_processors_choices_dict = {}
 	ff_choices_dict = {}
 
-	if FF_Does_Jobs:
-		# Get the state context and state dictionary
-		state_context = state_manager.detect_state_context()
-		state = state_manager.STATES[state_context]
 
-		# Process state dictionary
-		for key, value in state.items():
-			try:
-				json.dumps(value)  # Check if the value is JSON serializable
-				state_dict[key] = value	 # Store or update the value in the dictionary
-			except TypeError:
-				continue  # Skip values that are not JSON serializable
-	else:
-		imp_current_values = [facefusion.globals, frame_processors_globals]
-		for imp_current_value in imp_current_values:
-			for attr in dir(imp_current_value):
-				if not attr.startswith("__"):
-					value = getattr(imp_current_value, attr)
-					try:
-						json.dumps(value)  # Check if the value is JSON serializable
-						state_dict[attr] = value  # Store or update the value in the dictionary
-					except TypeError:
-						continue  # Skip values that are not JSON serializable
+	imp_current_values = [facefusion.globals, frame_processors_globals]
+	for imp_current_value in imp_current_values:
+		for attr in dir(imp_current_value):
+			if not attr.startswith("__"):
+				value = getattr(imp_current_value, attr)
+				try:
+					json.dumps(value)  # Check if the value is JSON serializable
+					state_dict[attr] = value  # Store or update the value in the dictionary
+				except TypeError:
+					continue  # Skip values that are not JSON serializable
 	other_choices = [frame_processors_choices, ff_choices]
 	for other_choice in other_choices:
 		other_choice_dict = {}
@@ -1769,6 +1661,7 @@ def copy_to_media_cache(file_paths):
 		return cached_paths	 # Return the list of paths
 		
 		
+		
 def check_for_unneeded_media_cache():
 	if not os.path.exists(working_dir):
 		os.makedirs(working_dir)
@@ -1782,12 +1675,14 @@ def check_for_unneeded_media_cache():
 	needed_files = set()
 	for job in jobs:
 		if job['status'] in {'pending', 'failed', 'missing', 'editing', 'archived', 'executing'}:
-			# Now handle sourcecache as a list
-			for source_cache_path in job['sourcecache']:
-				source_basename = os.path.basename(source_cache_path)
-				needed_files.add(source_basename)
+			# Ensure sourcecache is a list
+			if job['sourcecache']:
+				for source_cache_path in job['sourcecache']:
+					source_basename = os.path.basename(source_cache_path)
+					needed_files.add(source_basename)
 			target_basename = os.path.basename(job['targetcache'])
 			needed_files.add(target_basename)
+
 	# Delete files that are not needed
 	for cache_file in cache_files:
 		if cache_file not in needed_files:
@@ -1896,7 +1791,6 @@ ENDC = '\033[0m'	   #use this	Resets color to default
 
 print(f"{BLUE}FaceFusion version: {GREEN}{facefusion_version}{ENDC}")
 print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
-
 if not automatic1111:
 	default_values = get_values_from_FF("default_values")	
 	settings_path = default_values.get("config_path", "")
@@ -1932,10 +1826,6 @@ last_justtextmsg = ""
 root = None
 pending_jobs_var = None
 
-		
-
-gradio_version = pkg_resources.get_distribution("gradio").version
-debug_print(f"gradio version: {gradio_version}")
 debug_print("FaceFusion Base Directory:", base_dir)
 debug_print("QueueItUp Working Directory:", working_dir)
 debug_print("QueueItUp Media Cache Directory:", media_cache_dir)

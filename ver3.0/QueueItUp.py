@@ -19,28 +19,19 @@ from facefusion import metadata
 from facefusion.processors.frame import choices as frame_processors_choices
 from facefusion import choices as ff_choices
 from facefusion.uis.components import about, common_options, execution, execution_queue_count, execution_thread_count, face_analyser, face_masker, face_selector, frame_processors, frame_processors_options, memory, output, output_options, preview, source, target, temp_frame, trim_frame
+from facefusion import logger, process_manager, state_manager
+from facefusion.uis.components import instant_runner, job_manager, job_runner, ui_workflow
+from facefusion.jobs.job_runner import run_job, run_jobs, run_steps, finalize_steps, collect_output_set
+
+
 try:
 	from facefusion.uis.components import target_options
 	yt_addon = True
 except ImportError:
 	yt_addon = False
-import pkg_resources
+
 facefusion_version = metadata.get('version')
 queueitup_version = '2.7 --->  is  next->2.7 compatable post jobs versions'
-automatic1111 = "AUTOMATIC1111" in facefusion_version
-def is_version_valid(version_str):
-	if version_str == "NEXT":
-		return True
-	try:
-		parsed_version = version.parse(version_str)
-		return parsed_version >= version.parse("2.7")
-	except InvalidVersion:
-		return False
-FF_Does_Jobs = is_version_valid(facefusion_version)
-print(f"FF_Does_Jobs: {FF_Does_Jobs}")
-from facefusion import logger, process_manager, state_manager
-from facefusion.uis.components import instant_runner, job_manager, job_runner, ui_workflow
-from facefusion.jobs.job_runner import run_job, run_jobs, run_steps, finalize_steps, collect_output_set
 
 def pre_check() -> bool:
 	return True
@@ -1298,15 +1289,14 @@ def RUN_job_args(current_run_job):
 	arg_output_path = f"-o \"{clioutputname}\""
 	simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
 	simulated_cmd = simulated_args.replace('\\\\', '\\')
-	debug_print (f"{YELLOW}--job-create {current_run_job['id']}")
 	process = subprocess.Popen(f"python run.py --job-create {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
 	process = subprocess.Popen(f"python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
 	process.wait()	# Wait for process to complete
-	process = subprocess.Popen(f"python run.py --job-submit {current_run_job['id']}")		 
+	process = subprocess.Popen(f"python run.py --job-submit {current_run_job['id']}")	
+	process.wait()	# Wait for process to complete
+	
 	process = subprocess.Popen(f"python run.py --job-run {current_run_job['id']}", stdout=subprocess.PIPE)
-	# process = run_job((current_run_job['id']), 'process_step')
-
 	process.wait()
 	
 	failed_path = os.path.join(state_manager.get_item('jobs_path'), 'failed', f"{current_run_job['id']}.json")
@@ -1756,14 +1746,9 @@ ENDC = '\033[0m'	   #use this	Resets color to default
 print(f"{BLUE}FaceFusion version: {GREEN}{facefusion_version}{ENDC}")
 print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
 
-if not automatic1111:
-	default_values = get_values_from_FF("default_values")	
-	settings_path = default_values.get("config_path", "")
+default_values = get_values_from_FF("default_values")	
+settings_path = default_values.get("config_path", "")
 	
-if automatic1111:
-	import facefusion.core2 as core2
-	venv_python = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'venv', 'scripts', 'python.exe'))
-	settings_path = os.path.join(base_dir, "facefusion.ini")
 
 
 
@@ -1792,15 +1777,10 @@ root = None
 pending_jobs_var = None
 
 		
-
-gradio_version = pkg_resources.get_distribution("gradio").version
-debug_print(f"gradio version: {gradio_version}")
 debug_print("FaceFusion Base Directory:", base_dir)
 debug_print("QueueItUp Working Directory:", working_dir)
 debug_print("QueueItUp Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
-if automatic1111:
-	debug_print("the Venv Python Path is:", venv_python)
 debug_print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
 debug_print(f"QUEUEITUP{BLUE} COLOR OUTPUT KEY")
 debug_print(f"{BLUE}BLUE = normal QueueItUp color output key")
