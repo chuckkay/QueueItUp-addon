@@ -19,7 +19,6 @@ from facefusion import metadata
 from facefusion.processors.frame import choices as frame_processors_choices
 from facefusion import choices as ff_choices
 from facefusion.uis.components import about, common_options, execution, execution_queue_count, execution_thread_count, face_analyser, face_masker, face_selector, frame_processors, frame_processors_options, memory, output, output_options, preview, source, target, temp_frame, trim_frame
-
 try:
 	from facefusion.uis.components import target_options
 	yt_addon = True
