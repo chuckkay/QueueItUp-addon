@@ -75,12 +75,13 @@ def render() -> gradio.Blocks:
 					with gradio.Blocks():
 						target_options.render()
 				with gradio.Blocks():
-					output.render()
-				with gradio.Blocks():
 					STATUS_WINDOW.render()
 					ADD_JOB_BUTTON.render()
 					EDIT_JOB_BUTTON.render()
 					RUN_JOBS_BUTTON.render()
+				with gradio.Blocks():
+					output.render()
+
 			with gradio.Column(scale = 3):
 				with gradio.Blocks():
 					preview.render()
