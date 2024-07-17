@@ -1289,26 +1289,26 @@ def RUN_job_args(current_run_job):
 	arg_output_path = f"-o \"{clioutputname}\""
 	simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
 	simulated_cmd = simulated_args.replace('\\\\', '\\')
-	process = subprocess.Popen(f"python run.py --job-create {current_run_job['id']}")	
+	process = subprocess.Popen(f"python facefusion.py --job-create {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
-	process = subprocess.Popen(f"python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
+	process = subprocess.Popen(f"python facefusion.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
 	process.wait()	# Wait for process to complete
-	process = subprocess.Popen(f"python run.py --job-submit {current_run_job['id']}")	
+	process = subprocess.Popen(f"python facefusion.py --job-submit {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
 	
-	process = subprocess.Popen(f"python run.py --job-run {current_run_job['id']}", stdout=subprocess.PIPE)
+	process = subprocess.Popen(f"python facefusion.py --job-run {current_run_job['id']}", stdout=subprocess.PIPE)
 	process.wait()
 	
 	failed_path = os.path.join(state_manager.get_item('jobs_path'), 'failed', f"{current_run_job['id']}.json")
 	if os.path.exists(failed_path):
 		print (f"{RED}Job FAILED{ENDC}")
-		process = subprocess.Popen(f"python run.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
+		process = subprocess.Popen(f"python facefusion.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
 		current_run_job['status'] = 'failed'
 	else:
 		current_run_job['status'] = 'completed'
 
 		if not keep_completed_jobs: 
-			process = subprocess.Popen(f"python run.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
+			process = subprocess.Popen(f"python facefusion.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
 
 	return current_run_job
 
