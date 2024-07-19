@@ -40,11 +40,9 @@ def pre_render() -> bool:
 
 def render() -> gradio.Blocks:
 	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW, SETTINGS_BUTTON
-
 	with gradio.Blocks() as layout:
 		with gradio.Row():
 			with gradio.Column(scale = 2):
-
 				with gradio.Blocks():
 					ABOUT.render()
 					STATUS_WINDOW.render()
@@ -62,7 +60,6 @@ def render() -> gradio.Blocks:
 					temp_frame.render()
 				with gradio.Blocks():
 					output_options.render()
-
 				with gradio.Blocks():
 					common_options.render()
 			with gradio.Column(scale = 2):
@@ -109,7 +106,6 @@ def listen() -> None:
 	target.listen()
 	if yt_addon:
 		target_options.listen()
-	
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
@@ -123,7 +119,6 @@ def run(ui : gradio.Blocks) -> None:
 	ui.launch(show_api = False, inbrowser = state_manager.get_item('open_browser'))
 
 
-	
 def assemble_queue():
 	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
 	missing_paths = []
@@ -883,8 +878,6 @@ def remove_old_grid(job_id_hash, source_or_target):
 	image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
 	filesystem.remove_file(grid_thumb_path)
-	## if os.path.exists(grid_thumb_path):
-		## os.remove(grid_thumb_path)
 	debug_print(f"Deleted temporary Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")  
 	
 def archive_job(job):
@@ -980,7 +973,7 @@ def edit_job_arguments_text(job):
 	job_args = job.get('job_args', '')
 	edit_arg_window = tk.Toplevel()
 	edit_arg_window.title("Edit Job Arguments - tip greyed out values are defaults and will be used if needed, uncheck any argument to restore it to the default value")
-	edit_arg_window.geometry("1050x530")
+	edit_arg_window.geometry("1050x580")
 	canvas = tk.Canvas(edit_arg_window)
 	scrollable_frame = tk.Frame(canvas)
 	canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
@@ -1030,7 +1023,7 @@ def edit_job_arguments_text(job):
 
 		var.trace_add("write", lambda *args, var=var, entry=entry, default_value=default_value, cli_arg=cli_arg: update_entry(var, entry, default_value, cli_arg))
 		row += 1
-		if row >= 18:
+		if row >= 19:
 			row = 0
 			col += 1
 
@@ -1227,11 +1220,7 @@ def create_job_thumbnail(parent, job, source_or_target):
 
 	for file in thumbnail_files:
 		filesystem.remove_file(file)
-		## if os.path.exists(file):
-			## os.remove(file)
 	filesystem.remove_file(list_file_path)
-	## if os.path.exists(list_file_path):
-		## os.remove(list_file_path)
 	return button
 
 def update_paths(job, path, source_or_target):
@@ -1641,7 +1630,6 @@ def check_for_unneeded_media_cache():
 	for cache_file in cache_files:
 		if cache_file not in needed_files:
 			filesystem.remove_file(os.path.join(media_cache_dir, cache_file))
-			## os.remove(os.path.join(media_cache_dir, cache_file))
 			debug_print(f"{GREEN}Deleted unneeded temp mediacache file: {cache_file}{ENDC}")
 
 
@@ -1679,7 +1667,6 @@ def check_if_needed(job, source_or_target):
 					if os.path.exists(normalized_source_path):
 						try:
 							filesystem.remove_file(normalized_source_path)
-							## os.remove(normalized_source_path)
 							action_message = f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs"
 						except Exception as e:
 							action_message = f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}"
@@ -1697,7 +1684,6 @@ def check_if_needed(job, source_or_target):
 			if os.path.exists(normalized_target_path):
 				try:
 					filesystem.remove_file(normalized_target_path)
-					##os.remove(normalized_target_path)
 					action_message = (f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs\n\n")
 				except Exception as e:
 					action_message = (f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}\n\n")
