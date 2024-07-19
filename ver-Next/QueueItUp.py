@@ -18,11 +18,8 @@ from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollba
 from facefusion import metadata
 from facefusion.processors.frame import choices as frame_processors_choices
 from facefusion import choices as ff_choices
-from facefusion.uis.components import about, common_options, execution, execution_queue_count, execution_thread_count, face_analyser, face_masker, face_selector, frame_processors, frame_processors_options, memory, output, output_options, preview, source, target, temp_frame, trim_frame
-from facefusion import logger, process_manager, state_manager
-from facefusion.uis.components import instant_runner, job_manager, job_runner, ui_workflow
-from facefusion.jobs.job_runner import run_job, run_jobs, run_steps, finalize_steps, collect_output_set
-
+from facefusion import state_manager, filesystem
+from facefusion.uis.components import common_options, execution, execution_queue_count, execution_thread_count, face_analyser, face_masker, face_selector, frame_processors, frame_processors_options, instant_runner, job_manager, job_runner, memory, output, output_options, preview, source, target, temp_frame, trim_frame, ui_workflow
 
 try:
 	from facefusion.uis.components import target_options
@@ -43,11 +40,14 @@ def pre_render() -> bool:
 
 def render() -> gradio.Blocks:
 	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW, SETTINGS_BUTTON
+
 	with gradio.Blocks() as layout:
 		with gradio.Row():
 			with gradio.Column(scale = 2):
+
 				with gradio.Blocks():
-					about.render()
+					ABOUT.render()
+					STATUS_WINDOW.render()
 				with gradio.Blocks():
 					frame_processors.render()
 				with gradio.Blocks():
@@ -61,11 +61,10 @@ def render() -> gradio.Blocks:
 				with gradio.Blocks():
 					temp_frame.render()
 				with gradio.Blocks():
-					output_options.render()	
-					ui_workflow.render()
-					instant_runner.render()
-					job_runner.render()
-					job_manager.render()
+					output_options.render()
+
+				with gradio.Blocks():
+					common_options.render()
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					source.render()
@@ -75,13 +74,9 @@ def render() -> gradio.Blocks:
 					with gradio.Blocks():
 						target_options.render()
 				with gradio.Blocks():
-					STATUS_WINDOW.render()
 					ADD_JOB_BUTTON.render()
 					EDIT_JOB_BUTTON.render()
 					RUN_JOBS_BUTTON.render()
-				with gradio.Blocks():
-					output.render()
-
 			with gradio.Column(scale = 3):
 				with gradio.Blocks():
 					preview.render()
@@ -93,8 +88,7 @@ def render() -> gradio.Blocks:
 					face_masker.render()
 				with gradio.Blocks():
 					face_analyser.render()
-				with gradio.Blocks():
-					common_options.render()
+
 	return layout
 
 
@@ -115,11 +109,7 @@ def listen() -> None:
 	target.listen()
 	if yt_addon:
 		target_options.listen()
-	output.listen()
-	ui_workflow.listen()
-	instant_runner.listen()
-	job_runner.listen()
-	job_manager.listen()
+	
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
@@ -131,6 +121,8 @@ def listen() -> None:
 
 def run(ui : gradio.Blocks) -> None:
 	ui.launch(show_api = False, inbrowser = state_manager.get_item('open_browser'))
+
+
 	
 def assemble_queue():
 	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
@@ -307,9 +299,9 @@ def execute_jobs():
 			source_basenames = f"Source File {os.path.basename(current_run_job['sourcecache'])}"
 		target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions = get_target_info(current_run_job['targetcache'], current_run_job)
 		if target_filetype == 'Video':
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved as a {YELLOW}{output_video_length} {output_dimensions} sized {target_filetype}{ENDC} in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
 		else:
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved as a {YELLOW} {output_dimensions} sized {target_filetype}{ENDC} in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
 			
 ##
 		RUN_job_args(current_run_job)
@@ -427,8 +419,7 @@ def queueitup_settings():
 				files_to_delete_pattern = os.path.join(working_dir, '*_values.txt')
 				for file_path in glob.glob(files_to_delete_pattern):
 					try:
-						if os.path.exists(file_path):
-							os.remove(file_path)
+						filesystem.remove_file(file_path)
 					except PermissionError as e:
 						messagebox.showerror("Permission Error", f"Failed to delete {file_path}: {e}")
 					except Exception as e:
@@ -891,9 +882,10 @@ def jobs_to_delete(jobstatus):
 def remove_old_grid(job_id_hash, source_or_target):
 	image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
-	if os.path.exists(grid_thumb_path):
-		os.remove(grid_thumb_path)
-		debug_print(f"Deleted temporary Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")  
+	filesystem.remove_file(grid_thumb_path)
+	## if os.path.exists(grid_thumb_path):
+		## os.remove(grid_thumb_path)
+	debug_print(f"Deleted temporary Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")  
 	
 def archive_job(job):
 	if job['status'] == 'archived':
@@ -988,7 +980,7 @@ def edit_job_arguments_text(job):
 	job_args = job.get('job_args', '')
 	edit_arg_window = tk.Toplevel()
 	edit_arg_window.title("Edit Job Arguments - tip greyed out values are defaults and will be used if needed, uncheck any argument to restore it to the default value")
-	edit_arg_window.geometry("1050x500")
+	edit_arg_window.geometry("1050x530")
 	canvas = tk.Canvas(edit_arg_window)
 	scrollable_frame = tk.Frame(canvas)
 	canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
@@ -1038,7 +1030,7 @@ def edit_job_arguments_text(job):
 
 		var.trace_add("write", lambda *args, var=var, entry=entry, default_value=default_value, cli_arg=cli_arg: update_entry(var, entry, default_value, cli_arg))
 		row += 1
-		if row >= 17:
+		if row >= 18:
 			row = 0
 			col += 1
 
@@ -1234,10 +1226,12 @@ def create_job_thumbnail(parent, job, source_or_target):
 		debug_print(f"Failed to open grid image: {e}")
 
 	for file in thumbnail_files:
-		if os.path.exists(file):
-			os.remove(file)
-	if os.path.exists(list_file_path):
-		os.remove(list_file_path)
+		filesystem.remove_file(file)
+		## if os.path.exists(file):
+			## os.remove(file)
+	filesystem.remove_file(list_file_path)
+	## if os.path.exists(list_file_path):
+		## os.remove(list_file_path)
 	return button
 
 def update_paths(job, path, source_or_target):
@@ -1288,28 +1282,34 @@ def RUN_job_args(current_run_job):
 	arg_target_path = f"-t \"{current_run_job['targetcache']}\""
 	clioutputname = current_run_job['full_output_path']
 	arg_output_path = f"-o \"{clioutputname}\""
-	simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['headless']} {current_run_job['job_args']}"
+	simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['job_args']}"
 	simulated_cmd = simulated_args.replace('\\\\', '\\')
-	process = subprocess.Popen(f"python run.py --job-create {current_run_job['id']}")	
+	process = subprocess.Popen(f"python facefusion.py job-create {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
-	process = subprocess.Popen(f"python run.py --job-add-step {current_run_job['id']} {simulated_cmd}")	
+	process = subprocess.Popen(f"python facefusion.py job-add-step {current_run_job['id']} {simulated_cmd}")	
 	process.wait()	# Wait for process to complete
-	process = subprocess.Popen(f"python run.py --job-submit {current_run_job['id']}")	
+	process = subprocess.Popen(f"python facefusion.py job-submit {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
 	
-	process = subprocess.Popen(f"python run.py --job-run {current_run_job['id']}", stdout=subprocess.PIPE)
+	
+	# pendingjob = [ sys.executable, 'facefusion.py', 'job-run', {current_run_job['id']}]
+
+	# assert subprocess.run(pendingjob).returncode == 1	
+	
+	
+	process = subprocess.Popen(f"python facefusion.py job-run {current_run_job['id']}", stdout=subprocess.PIPE)
 	process.wait()
 	
 	failed_path = os.path.join(state_manager.get_item('jobs_path'), 'failed', f"{current_run_job['id']}.json")
 	if os.path.exists(failed_path):
 		print (f"{RED}Job FAILED{ENDC}")
-		process = subprocess.Popen(f"python run.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
+		process = subprocess.Popen(f"python facefusion.py job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
 		current_run_job['status'] = 'failed'
 	else:
 		current_run_job['status'] = 'completed'
 
 		if not keep_completed_jobs: 
-			process = subprocess.Popen(f"python run.py --job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
+			process = subprocess.Popen(f"python facefusion.py job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
 
 	return current_run_job
 
@@ -1416,7 +1416,6 @@ def get_values_from_FF(state_name):
 	state_dict = {}
 	frame_processors_choices_dict = {}
 	ff_choices_dict = {}
-
 	# Get the state context and state dictionary
 	state_context = state_manager.detect_state_context()
 	state = state_manager.STATES[state_context]
@@ -1641,7 +1640,8 @@ def check_for_unneeded_media_cache():
 	# Delete files that are not needed
 	for cache_file in cache_files:
 		if cache_file not in needed_files:
-			os.remove(os.path.join(media_cache_dir, cache_file))
+			filesystem.remove_file(os.path.join(media_cache_dir, cache_file))
+			## os.remove(os.path.join(media_cache_dir, cache_file))
 			debug_print(f"{GREEN}Deleted unneeded temp mediacache file: {cache_file}{ENDC}")
 
 
@@ -1678,7 +1678,8 @@ def check_if_needed(job, source_or_target):
 				if file_use_count < 2:
 					if os.path.exists(normalized_source_path):
 						try:
-							os.remove(normalized_source_path)
+							filesystem.remove_file(normalized_source_path)
+							## os.remove(normalized_source_path)
 							action_message = f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs"
 						except Exception as e:
 							action_message = f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}"
@@ -1695,7 +1696,8 @@ def check_if_needed(job, source_or_target):
 		if file_usage_counts.get(normalized_target_path, 0) < 2:
 			if os.path.exists(normalized_target_path):
 				try:
-					os.remove(normalized_target_path)
+					filesystem.remove_file(normalized_target_path)
+					##os.remove(normalized_target_path)
 					action_message = (f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs\n\n")
 				except Exception as e:
 					action_message = (f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}\n\n")
@@ -1747,7 +1749,10 @@ ENDC = '\033[0m'	   #use this	Resets color to default
 print(f"{BLUE}FaceFusion version: {GREEN}{facefusion_version}{ENDC}")
 print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
 
-default_values = get_values_from_FF("default_values")	
+default_values = get_values_from_FF("default_values")
+default_values['output_image_resolution'] = None
+default_values['output_video_resolution'] = None
+default_values['output_video_fps'] = None	
 settings_path = default_values.get("config_path", "")
 	
 
@@ -1758,7 +1763,7 @@ initialize_settings()
 create_and_verify_json(jobs_queue_file)
 
 thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
-
+ABOUT = gradio.Button(value = 'QUEUEITUP', variant = 'primary', link = 'https://github.com/chuckkay')
 ADD_JOB_BUTTON = gradio.Button("Add Job ", variant="primary")
 RUN_JOBS_BUTTON = gradio.Button("Run Jobs", variant="primary")
 EDIT_JOB_BUTTON = gradio.Button("Edit Jobs")
