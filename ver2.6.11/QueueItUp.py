@@ -303,9 +303,9 @@ def execute_jobs():
 			source_basenames = f"Source File {os.path.basename(current_run_job['sourcecache'])}"
 		target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions = get_target_info(current_run_job['targetcache'], current_run_job)
 		if target_filetype == 'Video':
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved as a {YELLOW}{output_video_length} {output_dimensions} sized {target_filetype}{ENDC} in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
 		else:
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved as a {YELLOW} {output_dimensions} sized {target_filetype}{ENDC} in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
 			
 ##
 		RUN_job_args(current_run_job)
