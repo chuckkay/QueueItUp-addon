@@ -1261,6 +1261,16 @@ def update_paths(job, path, source_or_target):
 
 def RUN_job_args(current_run_job):
 	global RUN_job_args
+	
+	failed_path = os.path.join(state_manager.get_item('jobs_path'), 'failed', f"{current_run_job['id']}.json")
+	draft_path = os.path.join(state_manager.get_item('jobs_path'), 'draft', f"{current_run_job['id']}.json")
+	queued_path = os.path.join(state_manager.get_item('jobs_path'), 'queued', f"{current_run_job['id']}.json")
+	#add code if any of these files failed_path or draft_path or queued_path exist then delete it
+	for path in [failed_path, draft_path, queued_path]:
+		if os.path.exists(path):
+			os.remove(path)
+	
+	
 	if isinstance(current_run_job['sourcecache'], list):
 		arg_source_paths = ' '.join(f'-s "{p}"' for p in current_run_job['sourcecache'])
 	else:
@@ -1280,16 +1290,9 @@ def RUN_job_args(current_run_job):
 	process = subprocess.Popen(f"python facefusion.py job-submit {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
 	
-	
-	# pendingjob = [ sys.executable, 'facefusion.py', 'job-run', {current_run_job['id']}]
-
-	# assert subprocess.run(pendingjob).returncode == 1	
-	
-	
 	process = subprocess.Popen(f"python facefusion.py job-run {current_run_job['id']}", stdout=subprocess.PIPE)
 	process.wait()
 	
-	failed_path = os.path.join(state_manager.get_item('jobs_path'), 'failed', f"{current_run_job['id']}.json")
 	if os.path.exists(failed_path):
 		print (f"{RED}Job FAILED{ENDC}")
 		process = subprocess.Popen(f"python facefusion.py job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
@@ -1738,7 +1741,7 @@ print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
 default_values = get_values_from_FF("default_values")
 default_values['output_image_resolution'] = None
 default_values['output_video_resolution'] = None
-default_values['output_video_fps'] = None	
+default_values['output_video_fps'] = 30	
 settings_path = default_values.get("config_path", "")
 	
 
