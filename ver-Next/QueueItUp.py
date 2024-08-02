@@ -16,10 +16,12 @@ from packaging.version import InvalidVersion
 import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
 from facefusion import metadata
-from facefusion.processors.frame import choices as frame_processors_choices
+from facefusion.processors import choices as processors_choices
 from facefusion import choices as ff_choices
 from facefusion import state_manager, filesystem
-from facefusion.uis.components import common_options, execution, execution_queue_count, execution_thread_count, face_analyser, face_masker, face_selector, frame_processors, frame_processors_options, instant_runner, job_manager, job_runner, memory, output, output_options, preview, source, target, temp_frame, trim_frame, ui_workflow
+from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_analyser, face_debugger_options, face_editor_options, face_enhancer_options, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, trim_frame, ui_workflow
+from facefusion.core import process_step
+from facefusion.jobs import job_runner as runqueuedjobs
 
 try:
 	from facefusion.uis.components import target_options
@@ -46,10 +48,27 @@ def render() -> gradio.Blocks:
 				with gradio.Blocks():
 					ABOUT.render()
 					STATUS_WINDOW.render()
+				
 				with gradio.Blocks():
-					frame_processors.render()
+					processors.render()
 				with gradio.Blocks():
-					frame_processors_options.render()
+					age_modifier_options.render()
+				with gradio.Blocks():
+					expression_restorer_options.render()
+				with gradio.Blocks():
+					face_debugger_options.render()
+				with gradio.Blocks():
+					face_editor_options.render()
+				with gradio.Blocks():
+					face_enhancer_options.render()
+				with gradio.Blocks():
+					face_swapper_options.render()
+				with gradio.Blocks():
+					frame_colorizer_options.render()
+				with gradio.Blocks():
+					frame_enhancer_options.render()
+				with gradio.Blocks():
+					lip_syncer_options.render()
 				with gradio.Blocks():
 					execution.render()
 					execution_thread_count.render()
@@ -62,6 +81,11 @@ def render() -> gradio.Blocks:
 					output_options.render()
 				with gradio.Blocks():
 					common_options.render()
+				with gradio.Blocks():
+					ui_workflow.render()
+					instant_runner.render()
+					job_runner.render()
+					job_manager.render()
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					source.render()
@@ -73,7 +97,9 @@ def render() -> gradio.Blocks:
 				with gradio.Blocks():
 					ADD_JOB_BUTTON.render()
 					EDIT_JOB_BUTTON.render()
-					RUN_JOBS_BUTTON.render()
+					RUN_JOBS_BUTTON.render()					
+				with gradio.Blocks():
+					output.render()
 			with gradio.Column(scale = 3):
 				with gradio.Blocks():
 					preview.render()
@@ -85,7 +111,6 @@ def render() -> gradio.Blocks:
 					face_masker.render()
 				with gradio.Blocks():
 					face_analyser.render()
-
 	return layout
 
 
@@ -94,8 +119,16 @@ def listen() -> None:
 	ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
 	RUN_JOBS_BUTTON.click(execute_jobs)
 	EDIT_JOB_BUTTON.click(edit_queue_window, outputs=STATUS_WINDOW)
-	frame_processors.listen()
-	frame_processors_options.listen()
+	processors.listen()
+	age_modifier_options.listen()
+	expression_restorer_options.listen()
+	face_debugger_options.listen()
+	face_editor_options.listen()
+	face_enhancer_options.listen()
+	face_swapper_options.listen()
+	frame_colorizer_options.listen()
+	frame_enhancer_options.listen()
+	lip_syncer_options.listen()
 	execution.listen()
 	execution_thread_count.listen()
 	execution_queue_count.listen()
@@ -104,15 +137,18 @@ def listen() -> None:
 	output_options.listen()
 	source.listen()
 	target.listen()
+	output.listen()
 	if yt_addon:
 		target_options.listen()
+	instant_runner.listen()
+	job_runner.listen()
+	job_manager.listen()
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
 	face_masker.listen()
 	face_analyser.listen()
 	common_options.listen()
-
 
 
 def run(ui : gradio.Blocks) -> None:
@@ -134,7 +170,7 @@ def assemble_queue():
 	current_values = get_values_from_FF('current_values')
 
 	differences = {}
-	keys_to_skip = ["source_paths", "target_path", "output_path", "output_dir", "output_hash", "ui_layouts", "face_recognizer_model", "headless"]
+	keys_to_skip = ["source_paths", "target_path", "output_path", "output_dir", "output_hash", "ui_layouts", "headless"]
 
 	for key, current_value in current_values.items():
 		if key in keys_to_skip:
@@ -183,7 +219,7 @@ def assemble_queue():
 		else:
 			source_basenames = os.path.basename(cache_source_paths)
 			source_name, _ = os.path.splitext(source_basenames)	 # Handle single path correctly
-		debug_print(f"{GREEN}Source file{ENDC} copied to Media Cache folder: {GREEN}{source_basenames}{ENDC}\n\n")
+		#debug_print(f"{GREEN}Source file{ENDC} copied to Media Cache folder: {GREEN}{source_basenames}{ENDC}\n\n")
 
 	cache_target_path = copy_to_media_cache(target_path)
 
@@ -210,13 +246,13 @@ def assemble_queue():
 		source_name = None
 	if isinstance(cache_source_paths, str):
 		cache_source_paths = [cache_source_paths]
-	string_frame_processors = " + ".join(current_values['frame_processors'])
+	string_processors = " + ".join(current_values['processors'])
 
 	new_job = {
 		"job_args": job_args,
 		"status": "pending",
 		"headless": "--headless",
-		"frame_processors": string_frame_processors,
+		"processors": string_processors,
 		"sourcecache": (cache_source_paths),
 		"source_name": (source_name),
 		"targetcache": (cache_target_path),
@@ -238,7 +274,7 @@ def assemble_queue():
 		jobs.append(new_job)
 		save_jobs(jobs_queue_file, jobs)
 	if root and root.winfo_exists():
-		debug_print("edit queue windows is open")
+		#debug_print("edit queue windows is open")
 		save_jobs(jobs_queue_file, jobs)
 		refresh_frame_listbox()
 	load_jobs(jobs_queue_file)
@@ -282,7 +318,7 @@ def execute_jobs():
 		JOB_IS_EXECUTING = 1
 		CURRENT_JOB_NUMBER += 1
 		custom_print(f"{BLUE}Starting Job #{GREEN} {CURRENT_JOB_NUMBER}{ENDC}\n\n")
-		printjobtype = current_run_job['frame_processors']
+		printjobtype = current_run_job['processors']
 		custom_print(f"{BLUE}Executing Job # {CURRENT_JOB_NUMBER} of {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT}	{ENDC}\n\n")
 
 		if not os.path.exists(current_run_job['output_path']):
@@ -636,7 +672,8 @@ def batch_job(job):
 					path = copy_to_media_cache(path)
 					add_new_job['targetcache'] = path
 					update_paths(add_new_job, path, 'target')
-					debug_print(f"{YELLOW} target - {GREEN}{add_new_job['targetcache']}{YELLOW} copied to temp media cache dir{ENDC}")
+					# update_paths(add_new_job, path, 'output')
+					#debug_print(f"{YELLOW} target - {GREEN}{add_new_job['targetcache']}{YELLOW} copied to temp media cache dir{ENDC}")
 					original_index += 1	 # Increment the index for each new job
 					jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 				save_jobs(jobs_queue_file, jobs)
@@ -666,7 +703,8 @@ def batch_job(job):
 				path = copy_to_media_cache(path)
 				add_new_job[source_or_target + 'cache'] = path
 				update_paths(add_new_job, path, source_or_target)
-				debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
+
+				#debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
 				original_index += 1	 # Increment the index for each new job
 				jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 			save_jobs(jobs_queue_file, jobs)
@@ -878,7 +916,7 @@ def remove_old_grid(job_id_hash, source_or_target):
 	image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
 	filesystem.remove_file(grid_thumb_path)
-	debug_print(f"Deleted temporary Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")  
+	#debug_print(f"Deleted temporary Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")	
 	
 def archive_job(job):
 	if job['status'] == 'archived':
@@ -989,7 +1027,7 @@ def edit_job_arguments_text(job):
 		arg, value = match.groups()
 		value = ' '.join(value.split())	 # Normalize spaces
 		job_args_dict[arg] = value
-	skip_keys = ['--source-paths', '--target-path', '--output-path', '--face-recognizer-model', '--ui-layouts', '--ui_workflow', '--config-path', '--force-download', '--skip-download']
+	skip_keys = ['--source-paths', '--target-path', '--output-path', '--ui-layouts', '--ui_workflow', '--config-path', '--force-download', '--skip-download']
 	for arg, default_value in default_values.items():
 		cli_arg = '--' + arg.replace('_', '-')
 		if cli_arg in skip_keys:
@@ -1014,12 +1052,12 @@ def edit_job_arguments_text(job):
 		def update_entry(var=var, entry=entry, default_value=default_value, cli_arg=cli_arg):
 			if var.get():
 				entry.config(state=tk.NORMAL)
-				debug_print(f"Checkbox checked: {cli_arg}, Current value: {entry.get()}")
+				#debug_print(f"Checkbox checked: {cli_arg}, Current value: {entry.get()}")
 			else:
 				entry.config(state=tk.DISABLED)
 				entry.delete(0, tk.END)
 				entry.insert(0, str(default_value))
-				debug_print(f"Checkbox unchecked: {cli_arg}, Default value: {default_value}")
+				#debug_print(f"Checkbox unchecked: {cli_arg}, Default value: {default_value}")
 
 		var.trace_add("write", lambda *args, var=var, entry=entry, default_value=default_value, cli_arg=cli_arg: update_entry(var, entry, default_value, cli_arg))
 		row += 1
@@ -1034,22 +1072,22 @@ def edit_job_arguments_text(job):
 				entry_text = entries[arg].get().strip()
 				if entry_text:
 					new_job_args.append(f"{arg} {entry_text}")
-					debug_print(f"Saving argument: {arg}, Value: {entry_text}")
+					#debug_print(f"Saving argument: {arg}, Value: {entry_text}")
 
 		job['job_args'] = ' '.join(new_job_args)
-		debug_print("Updated Job Args:", job['job_args'])
+		#debug_print("Updated Job Args:", job['job_args'])
 
-		# Check for updated --frame-processors to update job['frame_processors']
-		if '--frame-processors' in job['job_args']:
+		# Check for updated --processors to update job['processors']
+		if '--processors' in job['job_args']:
 			job_args_list = job['job_args'].split()
 			try:
-				fp_index = job_args_list.index('--frame-processors')
-				new_frame_processors_args = []
+				fp_index = job_args_list.index('--processors')
+				new_processors_args = []
 				for arg in job_args_list[fp_index + 1:]:
 					if arg.startswith('--'):
 						break
-					new_frame_processors_args.append(arg)
-				job['frame_processors'] = ' '.join(new_frame_processors_args)
+					new_processors_args.append(arg)
+				job['processors'] = ' '.join(new_processors_args)
 			except ValueError:
 				pass
 		save_jobs(jobs_queue_file, jobs)
@@ -1110,14 +1148,14 @@ def create_job_thumbnail(parent, job, source_or_target):
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
 	if not os.path.exists(thumbnail_dir):
 		os.makedirs(thumbnail_dir)
-		debug_print(f"Created thumbnail directory: {thumbnail_dir}")
+		#debug_print(f"Created thumbnail directory: {thumbnail_dir}")
 
 	file_paths = job[source_or_target + 'cache']
 	file_paths = file_paths if isinstance(file_paths, list) else [file_paths]
 
 	for file_path in file_paths:
 		if not os.path.exists(file_path):
-			debug_print(f"File not found: {file_path}")
+			#debug_print(f"File not found: {file_path}")
 			button = Button(parent, text=f"File not found:\n\n {os.path.basename(file_path)}\nClick to update", bg='white', fg='black', command=lambda j=job: select_job_file(parent, j, source_or_target))
 			button.pack(pady=2, fill='x', expand=False)
 			return button
@@ -1214,7 +1252,7 @@ def create_job_thumbnail(parent, job, source_or_target):
 		button = Button(parent, image=grid_photo_image, command=lambda ft=source_or_target, j=job: select_job_file(parent, j, ft))
 		button.image = grid_photo_image
 		button.pack(side='left', padx=5)
-		debug_print(f"Created Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")
+		#debug_print(f"Created Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")
 	except Exception as e:
 		debug_print(f"Failed to open grid image: {e}")
 
@@ -1265,6 +1303,8 @@ def RUN_job_args(current_run_job):
 	failed_path = os.path.join(state_manager.get_item('jobs_path'), 'failed', f"{current_run_job['id']}.json")
 	draft_path = os.path.join(state_manager.get_item('jobs_path'), 'draft', f"{current_run_job['id']}.json")
 	queued_path = os.path.join(state_manager.get_item('jobs_path'), 'queued', f"{current_run_job['id']}.json")
+	completed_path = os.path.join(state_manager.get_item('jobs_path'), 'completed', f"{current_run_job['id']}.json")
+
 	#add code if any of these files failed_path or draft_path or queued_path exist then delete it
 	for path in [failed_path, draft_path, queued_path]:
 		if os.path.exists(path):
@@ -1278,6 +1318,7 @@ def RUN_job_args(current_run_job):
 			arg_source_paths = f"-s \"{current_run_job['sourcecache']}\""
 		else:
 			arg_source_paths = ""
+	print(arg_source_paths)
 	arg_target_path = f"-t \"{current_run_job['targetcache']}\""
 	clioutputname = current_run_job['full_output_path']
 	arg_output_path = f"-o \"{clioutputname}\""
@@ -1289,19 +1330,21 @@ def RUN_job_args(current_run_job):
 	process.wait()	# Wait for process to complete
 	process = subprocess.Popen(f"python facefusion.py job-submit {current_run_job['id']}")	
 	process.wait()	# Wait for process to complete
+	runqueuedjobs.run_job((current_run_job['id']), process_step)
+	#process = subprocess.Popen(f"python facefusion.py job-run {current_run_job['id']}", stdout=subprocess.PIPE)
+	#process.wait()
 	
-	process = subprocess.Popen(f"python facefusion.py job-run {current_run_job['id']}", stdout=subprocess.PIPE)
-	process.wait()
-	
-	if os.path.exists(failed_path):
-		print (f"{RED}Job FAILED{ENDC}")
-		process = subprocess.Popen(f"python facefusion.py job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
-		current_run_job['status'] = 'failed'
-	else:
+	if os.path.exists(completed_path):
 		current_run_job['status'] = 'completed'
+		print (f"{BLUE}Job completed{ENDC}")
 
 		if not keep_completed_jobs: 
 			process = subprocess.Popen(f"python facefusion.py job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
+	
+	else:
+		print (f"{RED}Job FAILED{ENDC}")
+		process = subprocess.Popen(f"python facefusion.py job-delete {current_run_job['id']}",stdout=subprocess.PIPE)
+		current_run_job['status'] = 'failed'
 
 	return current_run_job
 
@@ -1406,7 +1449,7 @@ def get_vid_length(total_seconds):
 def get_values_from_FF(state_name):
 
 	state_dict = {}
-	frame_processors_choices_dict = {}
+	processors_choices_dict = {}
 	ff_choices_dict = {}
 	# Get the state context and state dictionary
 	state_context = state_manager.detect_state_context()
@@ -1420,20 +1463,20 @@ def get_values_from_FF(state_name):
 		except TypeError:
 			continue  # Skip values that are not JSON serializable
 			
-	other_choices = [frame_processors_choices, ff_choices]
+	other_choices = [processors_choices, ff_choices]
 	for other_choice in other_choices:
 		other_choice_dict = {}
 		for attr in dir(other_choice):
 			if not attr.startswith("__"):
 				value = getattr(other_choice, attr)
 				try:
-					json.dumps(value)  # Check if the value is JSON serializable
+					json.dumps(value)	 # Check if the value is JSON serializable
 					other_choice_dict[attr] = value	 # Store or update the value in the dictionary
 				except TypeError:
-					continue  # Skip values that are not JSON serializable
+					continue	# Skip values that are not JSON serializable
 		
-		if other_choice is frame_processors_choices:
-			frame_processors_choices_dict = other_choice_dict
+		if other_choice is processors_choices:
+			processors_choices_dict = other_choice_dict
 		elif other_choice is ff_choices:
 			ff_choices_dict = other_choice_dict
 
@@ -1443,11 +1486,11 @@ def get_values_from_FF(state_name):
 		with open(os.path.join(working_dir, f"{state_name}.txt"), "w") as file:
 			for key, val in state_dict.items():
 				file.write(f"{key}: {val}\n")
-		debug_print(f"{state_name}.txt created")
+		#debug_print(f"{state_name}.txt created")
 		
 	if debugging:
 		choice_dicts = {
-			"frame_processors_choices_values.txt": frame_processors_choices_dict,
+			"processors_choices_values.txt": processors_choices_dict,
 			"ff_choices_values.txt": ff_choices_dict
 		}
 		
@@ -1455,7 +1498,7 @@ def get_values_from_FF(state_name):
 			with open(os.path.join(working_dir, filename), "w") as file:
 				for key, val in choice_dict.items():
 					file.write(f"{key}: {val}\n")
-			debug_print(f"{filename} created")
+			#debug_print(f"{filename} created")
 
 	return state_dict
 	
@@ -1633,7 +1676,7 @@ def check_for_unneeded_media_cache():
 	for cache_file in cache_files:
 		if cache_file not in needed_files:
 			filesystem.remove_file(os.path.join(media_cache_dir, cache_file))
-			debug_print(f"{GREEN}Deleted unneeded temp mediacache file: {cache_file}{ENDC}")
+			#debug_print(f"{GREEN}Deleted unneeded temp mediacache file: {cache_file}{ENDC}")
 
 
 def check_if_needed(job, source_or_target):
@@ -1677,7 +1720,7 @@ def check_if_needed(job, source_or_target):
 						action_message = f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist."
 				else:
 					action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job."
-				debug_print(f"{action_message}\n\n")
+				#debug_print(f"{action_message}\n\n")
 				print_existing_jobs()
 	# Check and handle targetcache path
 	if source_or_target in ['both', 'target']:
@@ -1694,7 +1737,7 @@ def check_if_needed(job, source_or_target):
 				action_message = (f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist.\n\n")
 		else:
 			action_message = (f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job.\n\n")
-		debug_print(f"{action_message}\n\n")
+		#debug_print(f"{action_message}\n\n")
 		print_existing_jobs()
 
 def preprocess_execution_providers(data):
