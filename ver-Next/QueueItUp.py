@@ -201,26 +201,26 @@ def assemble_queue():
 	source_paths = current_values.get("source_paths", [])
 	target_path = current_values.get("target_path", "")
 
-	while True:
-		if JOB_IS_RUNNING:
-			if JOB_IS_EXECUTING:
-				debug_print("Job is executing.")
-				break
-			else:
-				debug_print("Job is running but not executing. Stuck in loop.\n")
-				time.sleep(1)
-		else:
-			debug_print("Job is not running.")
-			break
-	oldeditjob = None
-	found_editing = False
-	jobs = load_jobs(jobs_queue_file)
+	# while True:
+		# if JOB_IS_RUNNING:
+			# if JOB_IS_EXECUTING:
+				# # debug_print("Job is executing.")
+				# break
+			# else:
+				# debug_print("Job is running but not executing. Stuck in loop.\n")
+				# time.sleep(1)
+		# else:
+			# # debug_print("Job is not running.")
+			# break
+	# oldeditjob = None
+	# found_editing = False
+	# jobs = load_jobs(jobs_queue_file)
 
-	for job in jobs:
-		if job['status'] == 'editing':
-			oldeditjob = job.copy()
-			found_editing = True
-			break
+	# for job in jobs:
+		# if job['status'] == 'editing':
+			# oldeditjob = job.copy()
+			# found_editing = True
+			# break
 	if source_paths is not None:
 		cache_source_paths = copy_to_media_cache(source_paths)
 		if isinstance(cache_source_paths, list):
@@ -280,9 +280,10 @@ def assemble_queue():
 			for key, val in current_values.items():
 				file.write(f"{key}: {val}\n")
 
-	if not found_editing:
-		jobs.append(new_job)
-		save_jobs(jobs_queue_file, jobs)
+	# if not found_editing:
+	jobs = load_jobs(jobs_queue_file)
+	jobs.append(new_job)
+	save_jobs(jobs_queue_file, jobs)
 	if root and root.winfo_exists():
 		#debug_print("edit queue windows is open")
 		save_jobs(jobs_queue_file, jobs)
@@ -1540,7 +1541,7 @@ def print_existing_jobs():
 			message = f"{GREEN}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Jobs to Execute Them, or continue adding more jobs to the queue{ENDC}"
 		else:
 			message = f"{YELLOW}There are No jobs in the queue - Click Add Job instead of Start{ENDC}"
-	custom_print(message)
+	custom_print(f"\n\n {message}")
 		# Strip ANSI codes for STATUS_WINDOW
 	message = re.sub(r'\033\[\d+m', '', message)
 	STATUS_WINDOW.value = message
@@ -1559,22 +1560,51 @@ def update_counters():
 		root.after(0, lambda: pending_jobs_var.set(f"Delete {PENDING_JOBS_COUNT} Pending Jobs"))
 
 
+
+def attempt_fix_json(content):
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        # Attempt to fix common issues
+        if "Expecting ',' delimiter" in str(e):
+            fixed_content = content.replace('\n', '').replace(',]', ']').replace(',}', '}')
+            try:
+                return json.loads(fixed_content)
+            except json.JSONDecodeError:
+                pass
+        if "Extra data" in str(e):
+            fixed_content = content.split('}', 1)[0] + '}'
+            try:
+                return json.loads(fixed_content)
+            except json.JSONDecodeError:
+                pass
+    return None
+
 def create_and_verify_json(file_path):
-	if os.path.exists(file_path):
-		try:
-			with open(file_path, "r") as json_file:
-				json.load(json_file)
-		except json.JSONDecodeError:
-			backup_path = file_path + ".bak"
-			shutil.copy(file_path, backup_path)
-			debug_print(f"Backup of corrupt JSON file saved as '{backup_path}'. Please check it for salvageable data.\n\n")
-			with open(file_path, "w") as json_file:
-				json.dump([], json_file)
-			debug_print(f"Original JSON file '{file_path}' was corrupt and has been reset to an empty list.\n\n")
-	else:
-		with open(file_path, "w") as json_file:
-			json.dump([], json_file)
-		debug_print(f"JSON file '{file_path}' did not exist and has been created.")
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r") as json_file:
+                json.load(json_file)
+        except json.JSONDecodeError:
+            backup_path = file_path + ".bak"
+            shutil.copy(file_path, backup_path)
+            debug_print(f"Backup of corrupt JSON file saved as '{backup_path}'. Please check it for salvageable data.\n\n")
+
+            with open(file_path, "r") as json_file:
+                content = json_file.read()
+                fixed_data = attempt_fix_json(content)
+                if fixed_data is not None:
+                    with open(file_path, "w") as json_file:
+                        json.dump(fixed_data, json_file)
+                    debug_print(f"JSON file '{file_path}' was corrupt and has been repaired.\n\n")
+                else:
+                    with open(file_path, "w") as json_file:
+                        json.dump([], json_file)
+                    debug_print(f"Original JSON file '{file_path}' was corrupt and could not be repaired. It has been reset to an empty list.\n\n")
+    else:
+        with open(file_path, "w") as json_file:
+            json.dump([], json_file)
+        debug_print(f"JSON file '{file_path}' did not exist and has been created.")
 
 
 def load_jobs(file_path):
@@ -1733,7 +1763,7 @@ def check_if_needed(job, source_or_target):
 				else:
 					action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job."
 				#debug_print(f"{action_message}\n\n")
-				print_existing_jobs()
+				# print_existing_jobs()
 	# Check and handle targetcache path
 	if source_or_target in ['both', 'target']:
 		target_cache_path = job['targetcache']
@@ -1750,7 +1780,7 @@ def check_if_needed(job, source_or_target):
 		else:
 			action_message = (f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job.\n\n")
 		#debug_print(f"{action_message}\n\n")
-		print_existing_jobs()
+		# print_existing_jobs()
 
 def preprocess_execution_providers(data):
 	new_data = data.copy()
