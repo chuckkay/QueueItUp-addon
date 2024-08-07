@@ -18,8 +18,8 @@ from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollba
 from facefusion import metadata
 from facefusion.processors import choices as processors_choices
 from facefusion import choices as ff_choices
-from facefusion import state_manager, filesystem
-from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_analyser, face_debugger_options, face_editor_options, face_enhancer_options, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, trim_frame, ui_workflow
+from facefusion import logger,state_manager, filesystem
+from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_analyser, face_debugger_options, face_editor_options, face_enhancer_options, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, terminal, trim_frame, ui_workflow
 from facefusion.core import process_step
 from facefusion.jobs import job_runner as runqueuedjobs
 
@@ -41,14 +41,12 @@ def pre_render() -> bool:
 
 
 def render() -> gradio.Blocks:
-	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, STATUS_WINDOW, SETTINGS_BUTTON
+	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, SETTINGS_BUTTON
 	with gradio.Blocks() as layout:
 		with gradio.Row():
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					ABOUT.render()
-					STATUS_WINDOW.render()
-
 				with gradio.Blocks():
 					processors.render()
 				with gradio.Blocks():
@@ -98,6 +96,7 @@ def render() -> gradio.Blocks:
 					ADD_JOB_BUTTON.render()
 					EDIT_JOB_BUTTON.render()
 					RUN_JOBS_BUTTON.render()
+					terminal.render()
 				with gradio.Blocks():
 					output.render()
 			with gradio.Column(scale = 3):
@@ -115,11 +114,12 @@ def render() -> gradio.Blocks:
 
 
 def listen() -> None:
-	global EDIT_JOB_BUTTON, STATUS_WINDOW
-	ADD_JOB_BUTTON.click(assemble_queue, outputs=STATUS_WINDOW)
+	global EDIT_JOB_BUTTON
+	ADD_JOB_BUTTON.click(assemble_queue)
 	RUN_JOBS_BUTTON.click(execute_jobs)
-	EDIT_JOB_BUTTON.click(edit_queue_window, outputs=STATUS_WINDOW)
+	EDIT_JOB_BUTTON.click(edit_queue_window)
 	processors.listen()
+	terminal.listen()
 	age_modifier_options.listen()
 	expression_restorer_options.listen()
 	face_debugger_options.listen()
@@ -156,7 +156,7 @@ def run(ui : gradio.Blocks) -> None:
 
 
 def assemble_queue():
-	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, STATUS_WINDOW, default_values, current_values
+	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, default_values, current_values
 	missing_paths = []
 	if not state_manager.get_item('target_path'):
 		missing_paths.append("target path")
@@ -166,7 +166,6 @@ def assemble_queue():
 	if missing_paths:
 		whats_missing = ", ".join(missing_paths)
 		custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}\n\n")
-		return STATUS_WINDOW.value
 	current_values = get_values_from_FF('current_values')
 
 	differences = {}
@@ -293,8 +292,7 @@ def assemble_queue():
 	if JOB_IS_RUNNING:
 		custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}\n\n")
 	else:
-		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue, {YELLOW}	Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs\n\n{ENDC}")
-	return STATUS_WINDOW.value
+		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue, {YELLOW}	Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
 
 
 def execute_jobs():
@@ -302,12 +300,10 @@ def execute_jobs():
 	load_jobs(jobs_queue_file)
 	count_existing_jobs()
 	if not PENDING_JOBS_COUNT + JOB_IS_RUNNING > 0:
-		custom_print(f"{RED}Whoops!!!, {YELLOW}There are {PENDING_JOBS_COUNT} Job(s) queued.{ENDC} Add a job to the queue before pressing Run Jobs.\n\n")
-		return STATUS_WINDOW.value
+		custom_print(f"{RED}Whoops!!!, {YELLOW}There are {PENDING_JOBS_COUNT} Job(s) queued.{ENDC} Add a job to the queue before pressing Run Jobs.")
 
 	if PENDING_JOBS_COUNT + JOB_IS_RUNNING > 0 and JOB_IS_RUNNING:
-		custom_print(f"{RED}Whoops {YELLOW}a Job is already executing, with {PENDING_JOBS_COUNT} more job(s) waiting to be processed.\n\n {RED}You don't want more than one job running at the same time your GPU can't handle that,{YELLOW}\n\nYou just need to click add job if jobs are already running, and the job will be placed in line for execution. you can edit the job order with Edit Queue button{ENDC}\n\n")
-		return STATUS_WINDOW.value
+		custom_print(f"{RED}Whoops {YELLOW}a Job is already executing, with {PENDING_JOBS_COUNT} more job(s) waiting to be processed. {RED}You don't want more than one job running at the same time your GPU can't handle that,{YELLOW}\n You just need to click add job if jobs are already running, and the job will be placed in line for execution. you can edit the job order with Edit Queue button{ENDC}")
 
 	jobs = load_jobs(jobs_queue_file)
 	JOB_IS_RUNNING = 1
@@ -328,9 +324,9 @@ def execute_jobs():
 		count_existing_jobs()
 		JOB_IS_EXECUTING = 1
 		CURRENT_JOB_NUMBER += 1
-		custom_print(f"{BLUE}Starting Job #{GREEN} {CURRENT_JOB_NUMBER}{ENDC}\n\n")
+		custom_print(f"{BLUE}Starting Job #{GREEN} {CURRENT_JOB_NUMBER}{ENDC}")
 		printjobtype = current_run_job['processors']
-		custom_print(f"{BLUE}Executing Job # {CURRENT_JOB_NUMBER} of {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT}	{ENDC}\n\n")
+		custom_print(f"{BLUE}Executing Job # {CURRENT_JOB_NUMBER} of {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT}	{ENDC}")
 
 		if not os.path.exists(current_run_job['output_path']):
 			os.makedirs(current_run_job['output_path'])
@@ -349,9 +345,9 @@ def execute_jobs():
 		RUN_job_args(current_run_job)
 ##
 		if current_run_job['status'] == 'failed':
-			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {RED} failed. Please check the validity of {source_basenames} and {RED}{os.path.basename(current_run_job['targetcache'])}.{BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}\n")
+			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {RED} failed. Please check the validity of {source_basenames} and {RED}{os.path.basename(current_run_job['targetcache'])}.{BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}")
 		else:
-			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {GREEN} completed successfully {BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}\n")
+			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {GREEN} completed successfully {BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}")
 
 		JOB_IS_EXECUTING = 0  # Reset the job execution flag
 		time.sleep(1)
@@ -394,7 +390,6 @@ def load_settings():
 	config = configparser.ConfigParser()
 	if not os.path.exists(settings_path):
 		config['QueueItUp'] = {
-			'debugging': 'True',
 			'keep_completed_jobs': 'True'
 		}
 		config['misc'] = {
@@ -405,7 +400,6 @@ def load_settings():
 	config.read(settings_path)
 	if 'QueueItUp' not in config.sections():
 		config['QueueItUp'] = {
-			'debugging': 'True',
 			'keep_completed_jobs': 'True'
 		}
 		with open(settings_path, 'w') as configfile:
@@ -417,7 +411,6 @@ def load_settings():
 		with open(settings_path, 'w') as configfile:
 			config.write(configfile)
 	settings = {
-		'debugging': config.getboolean('QueueItUp', 'debugging'),
 		'keep_completed_jobs': config.getboolean('QueueItUp', 'keep_completed_jobs'),
 		'log_level': config.get('misc', 'log_level')
 	}
@@ -430,7 +423,6 @@ def save_settings(settings):
 		config.add_section('QueueItUp')
 	if 'misc' not in config.sections():
 		config.add_section('misc')
-	config.set('QueueItUp', 'debugging', str(settings['debugging']))
 	config.set('QueueItUp', 'keep_completed_jobs', str(settings['keep_completed_jobs']))
 	config.set('misc', 'log_level', settings['log_level'])
 	with open(settings_path, 'w') as configfile:
@@ -438,34 +430,20 @@ def save_settings(settings):
 
 def initialize_settings():
 	settings = load_settings()
-	global debugging, keep_completed_jobs
-	debugging = settings['debugging']
+	global keep_completed_jobs
 	keep_completed_jobs = settings['keep_completed_jobs']
 
 def queueitup_settings():
 	def create_settings_window():
 		global setini
 		settings = load_settings()
-		original_debugging_value = settings['debugging']
 		original_keep_completed_jobs_value = settings['keep_completed_jobs']
 
 		def save_and_close():
 			global setini
-			settings['debugging'] = debugging_var.get()
-			settings['log_level'] = 'debug' if settings['debugging'] else 'info'
 			settings['keep_completed_jobs'] = keep_completed_jobs_var.get()
 			save_settings(settings)
 			initialize_settings()
-
-			if original_debugging_value and not settings['debugging']:
-				files_to_delete_pattern = os.path.join(working_dir, '*_values.txt')
-				for file_path in glob.glob(files_to_delete_pattern):
-					try:
-						filesystem.remove_file(file_path)
-					except PermissionError as e:
-						messagebox.showerror("Permission Error", f"Failed to delete {file_path}: {e}")
-					except Exception as e:
-						messagebox.showerror("Error", f"An error occurred while deleting {file_path}: {e}")
 
 			if original_keep_completed_jobs_value and not settings['keep_completed_jobs']:
 				jobs_to_delete("completed")
@@ -503,11 +481,7 @@ def queueitup_settings():
 		setini.geometry(f'{window_width}x{window_height}+{position_right}+{position_top}')
 		setini.attributes('-topmost', True)
 
-		debugging_var = tk.BooleanVar(value=settings['debugging'])
 		keep_completed_jobs_var = tk.BooleanVar(value=settings['keep_completed_jobs'])
-
-		tk.Label(setini, text="Debugging:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=5)
-		tk.Checkbutton(setini, variable=debugging_var).grid(row=0, column=1, padx=10, pady=5)
 
 		tk.Label(setini, text="Keep Completed Jobs:").grid(row=1, column=0, sticky=tk.W, padx=10, pady=5)
 		tk.Checkbutton(setini, variable=keep_completed_jobs_var).grid(row=1, column=1, padx=10, pady=5)
@@ -538,19 +512,16 @@ def edit_queue_window():
 			root.after(30, lambda: root.attributes('-topmost', False))
 
 			print_existing_jobs()
-			return STATUS_WINDOW.value
 		else:
 			edit_queue()
 			print_existing_jobs()
-			return STATUS_WINDOW.value
 	except tk.TclError as e:
 		root = None
 		edit_queue()
 		print_existing_jobs()
-		return STATUS_WINDOW.value
 
 def edit_queue():
-	global root, edit_queue_running, frame, canvas, STATUS_WINDOW, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
+	global root, edit_queue_running, frame, canvas, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
 
 	if edit_queue_running:
 		return	# Prevent multiple instances of the window
@@ -616,7 +587,6 @@ def edit_queue():
 	root.mainloop()
 	root = None	 # Ensure root is set to None when the window is closed
 	edit_queue_running = False	# Reset the running state
-	return STATUS_WINDOW.value
 
 def run_jobs_click():
 	save_jobs(jobs_queue_file, jobs)
@@ -725,7 +695,7 @@ def batch_job(job):
 	if job['sourcecache']:
 		source_filenames = [os.path.basename(src) for src in job['sourcecache']]
 		message = (
-			f"Welcome to the BatchItUp feature. Here you can add multiple batch jobs with just a few clicks.\n\n"
+			f"Welcome to the BatchItUp feature. Here you can add multiple batch jobs with just a few clicks."
 			f"Click the 'Use Source' button to select as many target {target_filetype}s as you like and BatchItUp will create a job for each {target_filetype} "
 			f"using {', '.join(source_filenames)} as the source image(s), OR you can Click 'Use Target' to select as many Source Images as you like and BatchItUp will "
 			f"create a job for each source image using {os.path.basename(job['targetcache'])} as the target {target_filetype}."
@@ -903,7 +873,6 @@ def close_window():
 	edit_queue_running = False
 	if root:
 		root.destroy()
-	return STATUS_WINDOW.value
 
 def make_job_pending(job):
 	job['status'] = 'pending'
@@ -927,7 +896,6 @@ def remove_old_grid(job_id_hash, source_or_target):
 	image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
 	filesystem.remove_file(grid_thumb_path)
-	#debug_print(f"Deleted temporary Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")
 
 def archive_job(job):
 	if job['status'] == 'archived':
@@ -1263,7 +1231,6 @@ def create_job_thumbnail(parent, job, source_or_target):
 		button = Button(parent, image=grid_photo_image, command=lambda ft=source_or_target, j=job: select_job_file(parent, j, ft))
 		button.image = grid_photo_image
 		button.pack(side='left', padx=5)
-		#debug_print(f"Created Thumbnail: {GREEN}{os.path.basename(grid_thumb_path)}{ENDC}\n\n")
 	except Exception as e:
 		debug_print(f"Failed to open grid image: {e}")
 
@@ -1460,7 +1427,7 @@ def get_vid_length(total_seconds):
 	return video_length
 
 def get_values_from_FF(state_name):
-
+	global debugging
 	state_dict = {}
 	processors_choices_dict = {}
 	ff_choices_dict = {}
@@ -1494,12 +1461,14 @@ def get_values_from_FF(state_name):
 			ff_choices_dict = other_choice_dict
 
 	state_dict = preprocess_execution_providers(state_dict)
-
+	if default_values.get("log_level", []) == 'debug':
+		debugging = True
+	else: 
+		debugging = False
 	if debugging:
 		with open(os.path.join(working_dir, f"{state_name}.txt"), "w") as file:
 			for key, val in state_dict.items():
 				file.write(f"{key}: {val}\n")
-		#debug_print(f"{state_name}.txt created")
 
 	if debugging:
 		choice_dicts = {
@@ -1511,26 +1480,35 @@ def get_values_from_FF(state_name):
 			with open(os.path.join(working_dir, filename), "w") as file:
 				for key, val in choice_dict.items():
 					file.write(f"{key}: {val}\n")
-			#debug_print(f"{filename} created")
+	if not debugging:
+		files_to_delete_pattern = os.path.join(working_dir, '*_values.txt')
+		for file_path in glob.glob(files_to_delete_pattern):
+			try:
+				filesystem.remove_file(file_path)
+			except PermissionError as e:
+				messagebox.showerror("Permission Error", f"Failed to delete {file_path}: {e}")
+			except Exception as e:
+				messagebox.showerror("Error", f"An error occurred while deleting {file_path}: {e}")
 
 	return state_dict
 
 def debug_print(*msgs):
 	if debugging:
-		custom_print(*msgs)
-
+		message = " ".join(str(msg) for msg in msgs)
+		justtextmsg = re.sub(r'\033\[\d+m', '', message)
+		last_justtextmsg = justtextmsg
+		custom_print(message)
+		if not last_justtextmsg == "":
+			logger.debug('QueueItUp', last_justtextmsg)
 
 def custom_print(*msgs):
 	global last_justtextmsg
 	message = " ".join(str(msg) for msg in msgs)
 	justtextmsg = re.sub(r'\033\[\d+m', '', message)
 	last_justtextmsg = justtextmsg
-
 	print(message)
-	STATUS_WINDOW.value = last_justtextmsg
-
-	return STATUS_WINDOW.value
-
+	if not last_justtextmsg == "":
+		logger.info('QueueItUp', last_justtextmsg)
 
 def print_existing_jobs():
 	count_existing_jobs()
@@ -1541,11 +1519,11 @@ def print_existing_jobs():
 			message = f"{GREEN}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Jobs to Execute Them, or continue adding more jobs to the queue{ENDC}"
 		else:
 			message = f"{YELLOW}There are No jobs in the queue - Click Add Job instead of Start{ENDC}"
-	custom_print(f"\n\n {message}")
-		# Strip ANSI codes for STATUS_WINDOW
-	message = re.sub(r'\033\[\d+m', '', message)
-	STATUS_WINDOW.value = message
-	return STATUS_WINDOW.value
+	justtextmsg = re.sub(r'\033\[\d+m', '', message)
+	last_justtextmsg = justtextmsg
+	if not last_justtextmsg == "":
+		logger.info('QueueItUp', last_justtextmsg)
+
 
 def count_existing_jobs():
 	global PENDING_JOBS_COUNT
@@ -1588,7 +1566,7 @@ def create_and_verify_json(file_path):
         except json.JSONDecodeError:
             backup_path = file_path + ".bak"
             shutil.copy(file_path, backup_path)
-            debug_print(f"Backup of corrupt JSON file saved as '{backup_path}'. Please check it for salvageable data.\n\n")
+            debug_print(f"Backup of corrupt JSON file saved as '{backup_path}'. Please check it for salvageable data.")
 
             with open(file_path, "r") as json_file:
                 content = json_file.read()
@@ -1596,11 +1574,11 @@ def create_and_verify_json(file_path):
                 if fixed_data is not None:
                     with open(file_path, "w") as json_file:
                         json.dump(fixed_data, json_file)
-                    debug_print(f"JSON file '{file_path}' was corrupt and has been repaired.\n\n")
+                    debug_print(f"JSON file '{file_path}' was corrupt and has been repaired.")
                 else:
                     with open(file_path, "w") as json_file:
                         json.dump([], json_file)
-                    debug_print(f"Original JSON file '{file_path}' was corrupt and could not be repaired. It has been reset to an empty list.\n\n")
+                    debug_print(f"Original JSON file '{file_path}' was corrupt and could not be repaired. It has been reset to an empty list.")
     else:
         with open(file_path, "w") as json_file:
             json.dump([], json_file)
@@ -1637,17 +1615,17 @@ def check_for_completed_failed_or_aborted_jobs():
 	for job in jobs:
 		if job['status'] == 'executing':
 			job['status'] = 'pending'
-			custom_print(f"{RED}A probable crash or aborted job execution was detected from your last use.... checking on status of unfinished jobs..{ENDC}\n\n")
+			custom_print(f"{RED}A probable crash or aborted job execution was detected from your last use.... checking on status of unfinished jobs..{ENDC}")
 			source_basenames = ""
 			if isinstance(job['sourcecache'], list):
 				source_basenames = [os.path.basename(path) for path in job['sourcecache']]
 			elif job['sourcecache']:
 				source_basenames = os.path.basename(job['sourcecache'])
-			custom_print(f"{GREEN}A job {GREEN}{source_basenames}{ENDC} to -> {GREEN}{os.path.basename(job['targetcache'])} was found that terminated early it will be moved back to the pending jobs queue - you have a Total of {PENDING_JOBS_COUNT + JOB_IS_RUNNING} in the Queue\n\n")
+			custom_print(f"{GREEN}A job {GREEN}{source_basenames}{ENDC} to -> {GREEN}{os.path.basename(job['targetcache'])} was found that terminated early it will be moved back to the pending jobs queue - you have a Total of {PENDING_JOBS_COUNT + JOB_IS_RUNNING} in the Queue")
 			save_jobs(jobs_queue_file, jobs)
 	if not keep_completed_jobs:
 		jobs_to_delete("completed")
-		custom_print(f"{BLUE}All completed jobs have been removed, if you would like to keep completed jobs change the setting to True{ENDC}\n\n")
+		custom_print(f"{BLUE}All completed jobs have been removed, if you would like to keep completed jobs change the setting to True{ENDC}")
 
 
 def sanitize_filename(filename):
@@ -1762,8 +1740,6 @@ def check_if_needed(job, source_or_target):
 						action_message = f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist."
 				else:
 					action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job."
-				#debug_print(f"{action_message}\n\n")
-				# print_existing_jobs()
 	# Check and handle targetcache path
 	if source_or_target in ['both', 'target']:
 		target_cache_path = job['targetcache']
@@ -1804,14 +1780,14 @@ base_dir = os.path.dirname(os.path.dirname(os.path.dirname(script_root)))
 user_dir = "QueueItUp"
 working_dir = os.path.normpath(os.path.join(base_dir, user_dir))
 media_cache_dir = os.path.normpath(os.path.join(working_dir, "mediacache"))
-debugging = True
 keep_completed_jobs = True
 default_values = {}
+debugging = True
+justtextmsg = ""
 if not os.path.exists(working_dir):
 	os.makedirs(working_dir)
 if not os.path.exists(media_cache_dir):
 	os.makedirs(media_cache_dir)
-STATUS_WINDOW = gradio.Textbox(label="Job Status", interactive=True)
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
 	# ANSI Color Codes
 RED = '\033[91m'	 #use this
@@ -1828,10 +1804,6 @@ default_values['output_image_resolution'] = None
 default_values['output_video_resolution'] = None
 default_values['output_video_fps'] = 30
 settings_path = default_values.get("config_path", "")
-
-
-
-
 
 initialize_settings()
 create_and_verify_json(jobs_queue_file)
@@ -1851,23 +1823,22 @@ edit_queue_running = False
 
 
 PENDING_JOBS_COUNT = count_existing_jobs()
-
 last_justtextmsg = ""
+
 root = None
 pending_jobs_var = None
 
 
 debug_print("FaceFusion Base Directory:", base_dir)
-debug_print("QueueItUp Working Directory:", working_dir)
-debug_print("QueueItUp Media Cache Directory:", media_cache_dir)
+debug_print("Working Directory:", working_dir)
+debug_print("Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
-debug_print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
-debug_print(f"QUEUEITUP{BLUE} COLOR OUTPUT KEY")
-debug_print(f"{BLUE}BLUE = normal QueueItUp color output key")
-debug_print(f"{GREEN}GREEN = file name, cache managment or processing progress")
-debug_print(f"{YELLOW}YELLOW = informational")
-debug_print(f"{RED}RED =QueueItUp detected a Problem{ENDC}\n\n")
-debug_print(f"{YELLOW}QueueItUp is Checking Status{ENDC}\n")
-
+print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
+print(f"QUEUEITUP{BLUE}  COLOR OUTPUT KEY")
+print(f"{BLUE}BLUE = normal color output key")
+print(f"{GREEN}GREEN = file name, cache managment or processing progress")
+print(f"{YELLOW}YELLOW = informational")
+print(f"{RED}RED =[detected a Problem{ENDC}\n\n")
+print(f"{YELLOW}Checking Status{ENDC}\n")
 check_for_completed_failed_or_aborted_jobs()
-debug_print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
+print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
