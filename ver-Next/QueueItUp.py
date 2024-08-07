@@ -79,11 +79,11 @@ def render() -> gradio.Blocks:
 					output_options.render()
 				with gradio.Blocks():
 					common_options.render()
-				with gradio.Blocks():
-					ui_workflow.render()
-					instant_runner.render()
-					job_runner.render()
-					job_manager.render()
+				# with gradio.Blocks():
+					# ui_workflow.render()
+					# instant_runner.render()
+					# job_runner.render()
+					# job_manager.render()
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					source.render()
@@ -140,9 +140,9 @@ def listen() -> None:
 	output.listen()
 	if yt_addon:
 		target_options.listen()
-	instant_runner.listen()
-	job_runner.listen()
-	job_manager.listen()
+	# instant_runner.listen()
+	# job_runner.listen()
+	# job_manager.listen()
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
@@ -1310,7 +1310,8 @@ def RUN_job_args(current_run_job):
 	process.wait()	# Wait for process to complete
 	process = subprocess.Popen(f"python facefusion.py job-submit {current_run_job['id']}")
 	process.wait()	# Wait for process to complete
-	runqueuedjobs.run_job((current_run_job['id']), process_step)
+	# runqueuedjobs.run_job((current_run_job['id']), process_step)
+	runqueuedjobs.run_jobs(process_step)
 	#process = subprocess.Popen(f"python facefusion.py job-run {current_run_job['id']}", stdout=subprocess.PIPE)
 	#process.wait()
 
