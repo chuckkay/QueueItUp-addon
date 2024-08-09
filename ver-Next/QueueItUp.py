@@ -256,7 +256,7 @@ def assemble_queue():
 	if JOB_IS_RUNNING:
 		custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
 	else:
-		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue, {YELLOW}	Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
+		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
 
 
 def execute_jobs():
@@ -295,20 +295,20 @@ def execute_jobs():
 			os.makedirs(current_run_job['output_path'])
 		source_basenames = ""
 		if isinstance(current_run_job['sourcecache'], list):
-			source_basenames = f"Source Files {', '.join(os.path.basename(path) for path in current_run_job['sourcecache'])}"
+			source_basenames = f"with Source Files {', '.join(os.path.basename(path) for path in current_run_job['sourcecache'])}"
 		elif current_run_job['sourcecache']:
-			source_basenames = f"Source File {os.path.basename(current_run_job['sourcecache'])}"
+			source_basenames = f"with Source File {os.path.basename(current_run_job['sourcecache'])}"
 		target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions = get_target_info(current_run_job['targetcache'], current_run_job)
 		if target_filetype == 'Video':
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - {GREEN}{source_basenames}\n{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC}, \n which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
 		else:
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - {GREEN}{source_basenames}\n{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC}, \n which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
 
 ##
 		RUN_job_args(current_run_job)
 ##
 		if current_run_job['status'] == 'failed':
-			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {RED} failed. Please check the validity of {source_basenames} and {RED}{os.path.basename(current_run_job['targetcache'])}.{BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}")
+			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {RED} failed. Please check the validity of {source_basenames} and {RED}{os.path.basename(current_run_job['targetcache'])}.\n {BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}")
 		else:
 			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {GREEN} completed successfully {BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}")
 
@@ -546,13 +546,14 @@ def run_jobs_click():
 	threading.Thread(target=execute_jobs).start()  # Run execute_jobs in a separate thread
 
 def clone_job(job):
+	clonebaseid = job['id']
 	clonedjob = job.copy()	# Copy the existing job to preserve other attributes
 	update_paths(clonedjob, "", "")
 	jobs = load_jobs(jobs_queue_file)
 	original_index = jobs.index(job)  # Find the index of the original job
 	jobs.insert(original_index + 1, clonedjob)	# Insert the cloned job right after the original job
 	save_jobs(jobs_queue_file, jobs)
-	custom_print(f"{YELLOW} Job Cloned{ENDC}")
+	custom_print(f"{YELLOW} The Job {clonebaseid} Was Cloned{ENDC}")
 	print_existing_jobs()
 	refresh_frame_listbox()
 	
@@ -600,6 +601,8 @@ def batch_job(job):
 				filetypes=file_types
 			)
 			if selected_paths:
+				batchbasename = os.path.basename(job['targetcache'])
+				batchbase = 'Target'
 				jobs = load_jobs(jobs_queue_file)
 				original_index = jobs.index(job)  # Find the index of the original job
 				for path in selected_paths:
@@ -612,7 +615,7 @@ def batch_job(job):
 					original_index += 1	 # Increment the index for each new job
 					jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 				save_jobs(jobs_queue_file, jobs)
-				custom_print(f"{YELLOW} Batched Jobs Created{ENDC}")
+				custom_print(f"{YELLOW} The {batchbase} {batchbasename} was used to create Batched Jobs{ENDC}")
 				print_existing_jobs()
 				refresh_frame_listbox()
 		dialog.destroy()
@@ -621,11 +624,15 @@ def batch_job(job):
 	def open_file_dialog():
 		selected_paths = []
 		if source_or_target == 'source':
+			batchbasename = os.path.basename(job['targetcache'])
+			batchbase = 'Target'
 			selected_paths = filedialog.askopenfilenames(
 				title="Select Multiple targets for BatchItUp to make multiple cloned jobs using each File",
 				filetypes=[('Image files', '*.jpg *.jpeg  *.webp *.png')]
 			)
 		elif source_or_target == 'target':
+			batchbasename = 'media'
+			batchbase = 'Source'
 			file_types = [('Image files', '*.jpg *.jpeg *.webp *.png')] if target_filetype == 'Image' else [('Video files', '*.mp4 *.avi *.webm *.mov *.mkv')]
 			selected_paths = filedialog.askopenfilenames(
 				title="Select Multiple sources for BatchItUp to make multiple cloned jobs using each File",
@@ -643,7 +650,7 @@ def batch_job(job):
 				original_index += 1	 # Increment the index for each new job
 				jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 			save_jobs(jobs_queue_file, jobs)
-			custom_print(f"{YELLOW} Batched Jobs Created{ENDC}")
+			custom_print(f"{YELLOW} The {batchbase} {batchbasename} was used to create Batched Jobs{ENDC}")
 			print_existing_jobs()
 			refresh_frame_listbox()
 	dialog = tk.Toplevel()
@@ -833,7 +840,7 @@ def close_window():
 def make_job_pending(job):
 	job['status'] = 'pending'
 	save_jobs(jobs_queue_file, jobs)
-	custom_print(f"{YELLOW}Job Status was changed to pending{ENDC}")
+	custom_print(f"{YELLOW}A Job Status was changed to pending{ENDC}")
 	print_existing_jobs()
 	refresh_frame_listbox()
 	
@@ -848,11 +855,11 @@ def jobs_to_delete(jobstatus):
 			remove_old_grid(job_id_hash, source_or_target = 'target')
 	jobs = [job for job in jobs if job['status'] != jobstatus]
 	save_jobs(jobs_queue_file, jobs)
-	custom_print(f"{YELLOW}All {jobstatus} have been Deleted{ENDC}")
+	custom_print(f"{YELLOW}All {jobstatus} Jobs have been Deleted{ENDC}")
 	check_for_unneeded_media_cache
 	print_existing_jobs()
-	refresh_frame_listbox()
-
+	if edit_queue_running:
+		refresh_frame_listbox()
 def remove_old_grid(job_id_hash, source_or_target):
 	image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
@@ -957,7 +964,7 @@ def edit_job_arguments_text(job):
 	job_args = job.get('job_args', '')
 	edit_arg_window = tk.Toplevel()
 	edit_arg_window.title("Edit Job Arguments - tip greyed out values are defaults and will be used if needed, uncheck any argument to restore it to the default value")
-	edit_arg_window.geometry("1050x580")
+	edit_arg_window.geometry("1050x590")
 	canvas = tk.Canvas(edit_arg_window)
 	scrollable_frame = tk.Frame(canvas)
 	canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
@@ -973,7 +980,7 @@ def edit_job_arguments_text(job):
 		arg, value = match.groups()
 		value = ' '.join(value.split())	 # Normalize spaces
 		job_args_dict[arg] = value
-	skip_keys = ['--source-paths', '--target-path', '--output-path', '--ui-layouts', '--ui_workflow', '--config-path', '--force-download', '--skip-download']
+	skip_keys = ['--command', '--jobs-path', '--open-browser', '--job-id', '--job-status', '--step-index', '--source-paths', '--target-path', '--output-path', '--ui-layouts', '--ui-workflow', '--config-path', '--force-download', '--skip-download']
 	for arg, default_value in default_values.items():
 		cli_arg = '--' + arg.replace('_', '-')
 		if cli_arg in skip_keys:
@@ -1007,7 +1014,7 @@ def edit_job_arguments_text(job):
 
 		var.trace_add("write", lambda *args, var=var, entry=entry, default_value=default_value, cli_arg=cli_arg: update_entry(var, entry, default_value, cli_arg))
 		row += 1
-		if row >= 19:
+		if row >= 20:
 			row = 0
 			col += 1
 
@@ -1474,10 +1481,10 @@ def custom_print(*msgs):
 	print(message)
 	# Log the plain text message
 	if last_justtextmsg != "":
-		logger.info('QueueItUp', last_justtextmsg)
-		logger.debug('QueueItUp', last_justtextmsg)
-		logger.warn('QueueItUp', last_justtextmsg)
-		logger.error('QueueItUp', last_justtextmsg)
+		logger.info(' \n ', last_justtextmsg)
+		logger.debug(' \n ', last_justtextmsg)
+		logger.warn(' \n ', last_justtextmsg)
+		logger.error(' \n ', last_justtextmsg)
 
 def debug_print(*msgs):
 	if debugging:
@@ -1772,7 +1779,7 @@ edit_queue_running = False
 PENDING_JOBS_COUNT = count_existing_jobs()
 
 root = None
-pending_jobs_var = PENDING_JOBS_COUNT
+pending_jobs_var = None
 last_justtextmsg = (f"there are {PENDING_JOBS_COUNT} jobs in the queue")
 read_logs = (f"there are {PENDING_JOBS_COUNT} jobs in the queue")
 
@@ -1781,7 +1788,7 @@ debug_print("Working Directory:", working_dir)
 debug_print("Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
 print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
-print(f"QUEUEITUP{BLUE}	 COLOR OUTPUT KEY")
+print(f"QUEUEITUP{BLUE}  COLOR OUTPUT KEY")
 print(f"{BLUE}BLUE = normal color output key")
 print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 print(f"{YELLOW}YELLOW = informational")
