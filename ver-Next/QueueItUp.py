@@ -23,11 +23,6 @@ from facefusion.uis.components import about, age_modifier_options, common_option
 from facefusion.core import process_step
 from facefusion.jobs import job_runner as runqueuedjobs
 
-try:
-	from facefusion.uis.components import target_options
-	yt_addon = True
-except ImportError:
-	yt_addon = False
 
 facefusion_version = metadata.get('version')
 queueitup_version = '2.7 --->  is  next->2.7 compatable post jobs versions'
@@ -79,23 +74,16 @@ def render() -> gradio.Blocks:
 					output_options.render()
 				with gradio.Blocks():
 					common_options.render()
-				# with gradio.Blocks():
-					# ui_workflow.render()
-					# instant_runner.render()
-					# job_runner.render()
-					# job_manager.render()
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					source.render()
 				with gradio.Blocks():
 					target.render()
-				if yt_addon:
-					with gradio.Blocks():
-						target_options.render()
 				with gradio.Blocks():
 					ADD_JOB_BUTTON.render()
 					EDIT_JOB_BUTTON.render()
 					RUN_JOBS_BUTTON.render()
+				with gradio.Blocks():
 					terminal.render()
 				with gradio.Blocks():
 					output.render()
@@ -138,11 +126,6 @@ def listen() -> None:
 	source.listen()
 	target.listen()
 	output.listen()
-	if yt_addon:
-		target_options.listen()
-	# instant_runner.listen()
-	# job_runner.listen()
-	# job_manager.listen()
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
@@ -165,7 +148,7 @@ def assemble_queue():
 
 	if missing_paths:
 		whats_missing = ", ".join(missing_paths)
-		custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}\n\n")
+		custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}")
 	current_values = get_values_from_FF('current_values')
 
 	differences = {}
@@ -200,26 +183,7 @@ def assemble_queue():
 	source_paths = current_values.get("source_paths", [])
 	target_path = current_values.get("target_path", "")
 
-	# while True:
-		# if JOB_IS_RUNNING:
-			# if JOB_IS_EXECUTING:
-				# # debug_print("Job is executing.")
-				# break
-			# else:
-				# debug_print("Job is running but not executing. Stuck in loop.\n")
-				# time.sleep(1)
-		# else:
-			# # debug_print("Job is not running.")
-			# break
-	# oldeditjob = None
-	# found_editing = False
-	# jobs = load_jobs(jobs_queue_file)
 
-	# for job in jobs:
-		# if job['status'] == 'editing':
-			# oldeditjob = job.copy()
-			# found_editing = True
-			# break
 	if source_paths is not None:
 		cache_source_paths = copy_to_media_cache(source_paths)
 		if isinstance(cache_source_paths, list):
@@ -228,7 +192,7 @@ def assemble_queue():
 		else:
 			source_basenames = os.path.basename(cache_source_paths)
 			source_name, _ = os.path.splitext(source_basenames)	 # Handle single path correctly
-		#debug_print(f"{GREEN}Source file{ENDC} copied to Media Cache folder: {GREEN}{source_basenames}{ENDC}\n\n")
+		debug_print(f"{GREEN}Source file{ENDC} copied to Media Cache folder: {GREEN}{source_basenames}{ENDC}")
 
 	cache_target_path = copy_to_media_cache(target_path)
 
@@ -284,13 +248,13 @@ def assemble_queue():
 	jobs.append(new_job)
 	save_jobs(jobs_queue_file, jobs)
 	if root and root.winfo_exists():
-		#debug_print("edit queue windows is open")
+		debug_print("edit queue windows is open")
 		save_jobs(jobs_queue_file, jobs)
 		refresh_frame_listbox()
 	load_jobs(jobs_queue_file)
 	count_existing_jobs()
 	if JOB_IS_RUNNING:
-		custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}\n\n")
+		custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
 	else:
 		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue, {YELLOW}	Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
 
@@ -308,7 +272,6 @@ def execute_jobs():
 	jobs = load_jobs(jobs_queue_file)
 	JOB_IS_RUNNING = 1
 	CURRENT_JOB_NUMBER = 0
-	# current_run_job = {}
 	first_pending_job = next((job for job in jobs if job['status'] == 'pending'), None)
 	jobs = [job for job in jobs if job != first_pending_job]
 	# Change status to 'executing' and add it back to the jobs
@@ -324,7 +287,7 @@ def execute_jobs():
 		count_existing_jobs()
 		JOB_IS_EXECUTING = 1
 		CURRENT_JOB_NUMBER += 1
-		custom_print(f"{BLUE}Starting Job #{GREEN} {CURRENT_JOB_NUMBER}{ENDC}")
+		# custom_print(f"{BLUE}Starting Job #{GREEN} {CURRENT_JOB_NUMBER}{ENDC}")
 		printjobtype = current_run_job['processors']
 		custom_print(f"{BLUE}Executing Job # {CURRENT_JOB_NUMBER} of {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT}	{ENDC}")
 
@@ -337,9 +300,9 @@ def execute_jobs():
 			source_basenames = f"Source File {os.path.basename(current_run_job['sourcecache'])}"
 		target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions = get_target_info(current_run_job['targetcache'], current_run_job)
 		if target_filetype == 'Video':
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
 		else:
-			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}\n\n")
+			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - with {GREEN}{source_basenames}{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC} , which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
 
 ##
 		RUN_job_args(current_run_job)
@@ -378,7 +341,7 @@ def execute_jobs():
 			break
 	JOB_IS_RUNNING = 0
 	save_jobs(jobs_queue_file, jobs)
-	check_for_unneeded_media_cache()
+	check_for_unneeded_media_cache
 
 
 
@@ -392,9 +355,7 @@ def load_settings():
 		config['QueueItUp'] = {
 			'keep_completed_jobs': 'True'
 		}
-		config['misc'] = {
-			'log_level': 'debug'
-		}
+
 		with open(settings_path, 'w') as configfile:
 			config.write(configfile)
 	config.read(settings_path)
@@ -404,15 +365,8 @@ def load_settings():
 		}
 		with open(settings_path, 'w') as configfile:
 			config.write(configfile)
-	if 'misc' not in config.sections():
-		config['misc'] = {
-			'log_level': 'debug'
-		}
-		with open(settings_path, 'w') as configfile:
-			config.write(configfile)
 	settings = {
-		'keep_completed_jobs': config.getboolean('QueueItUp', 'keep_completed_jobs'),
-		'log_level': config.get('misc', 'log_level')
+		'keep_completed_jobs': config.getboolean('QueueItUp', 'keep_completed_jobs')
 	}
 	return settings
 
@@ -424,7 +378,6 @@ def save_settings(settings):
 	if 'misc' not in config.sections():
 		config.add_section('misc')
 	config.set('QueueItUp', 'keep_completed_jobs', str(settings['keep_completed_jobs']))
-	config.set('misc', 'log_level', settings['log_level'])
 	with open(settings_path, 'w') as configfile:
 		config.write(configfile)
 
@@ -598,10 +551,11 @@ def clone_job(job):
 	jobs = load_jobs(jobs_queue_file)
 	original_index = jobs.index(job)  # Find the index of the original job
 	jobs.insert(original_index + 1, clonedjob)	# Insert the cloned job right after the original job
-
 	save_jobs(jobs_queue_file, jobs)
+	custom_print(f"{YELLOW} Job Cloned{ENDC}")
+	print_existing_jobs()
 	refresh_frame_listbox()
-
+	
 def batch_job(job):
 	target_filetype = None
 	source_or_target = None
@@ -654,12 +608,13 @@ def batch_job(job):
 					add_new_job['targetcache'] = path
 					update_paths(add_new_job, path, 'target')
 					# update_paths(add_new_job, path, 'output')
-					#debug_print(f"{YELLOW} target - {GREEN}{add_new_job['targetcache']}{YELLOW} copied to temp media cache dir{ENDC}")
+					debug_print(f"{YELLOW} target - {GREEN}{add_new_job['targetcache']}{YELLOW} copied to temp media cache dir{ENDC}")
 					original_index += 1	 # Increment the index for each new job
 					jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 				save_jobs(jobs_queue_file, jobs)
+				custom_print(f"{YELLOW} Batched Jobs Created{ENDC}")
+				print_existing_jobs()
 				refresh_frame_listbox()
-
 		dialog.destroy()
 		open_file_dialog()
 
@@ -684,11 +639,12 @@ def batch_job(job):
 				path = copy_to_media_cache(path)
 				add_new_job[source_or_target + 'cache'] = path
 				update_paths(add_new_job, path, source_or_target)
-
-				#debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
+				debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
 				original_index += 1	 # Increment the index for each new job
 				jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 			save_jobs(jobs_queue_file, jobs)
+			custom_print(f"{YELLOW} Batched Jobs Created{ENDC}")
+			print_existing_jobs()
 			refresh_frame_listbox()
 	dialog = tk.Toplevel()
 	dialog.withdraw()
@@ -877,8 +833,11 @@ def close_window():
 def make_job_pending(job):
 	job['status'] = 'pending'
 	save_jobs(jobs_queue_file, jobs)
+	custom_print(f"{YELLOW}Job Status was changed to pending{ENDC}")
+	print_existing_jobs()
 	refresh_frame_listbox()
-
+	
+	
 def jobs_to_delete(jobstatus):
 	global jobs
 	jobs = load_jobs(jobs_queue_file)
@@ -889,20 +848,26 @@ def jobs_to_delete(jobstatus):
 			remove_old_grid(job_id_hash, source_or_target = 'target')
 	jobs = [job for job in jobs if job['status'] != jobstatus]
 	save_jobs(jobs_queue_file, jobs)
-	if edit_queue_running:
-		refresh_frame_listbox()
+	custom_print(f"{YELLOW}All {jobstatus} have been Deleted{ENDC}")
+	check_for_unneeded_media_cache
+	print_existing_jobs()
+	refresh_frame_listbox()
 
 def remove_old_grid(job_id_hash, source_or_target):
 	image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
 	filesystem.remove_file(grid_thumb_path)
-
+	check_for_unneeded_thumbnail_cache
+	
 def archive_job(job):
 	if job['status'] == 'archived':
 		job['status'] = 'pending'
+		custom_print(f"{YELLOW} Job Un-Archived{ENDC}")
 	else:
 		job['status'] = 'archived'
+		custom_print(f"{YELLOW} Job Archived{ENDC}")
 	save_jobs(jobs_queue_file, jobs)
+	print_existing_jobs()
 	refresh_frame_listbox()
 
 def reload_job_in_facefusion_edit(job):
@@ -952,11 +917,13 @@ def output_path_job(job):
 def delete_job(job):
 	job['status'] = ('deleting')
 	job_id_hash = job['id']
-	check_if_needed(job, 'both')
 	jobs.remove(job)
 	save_jobs(jobs_queue_file, jobs)
 	remove_old_grid(job_id_hash, source_or_target = 'source')
 	remove_old_grid(job_id_hash, source_or_target = 'target')
+	check_for_unneeded_media_cache
+	custom_print(f"{YELLOW} Job Deleted{ENDC}")
+	print_existing_jobs()
 	refresh_frame_listbox()
 
 
@@ -1031,12 +998,12 @@ def edit_job_arguments_text(job):
 		def update_entry(var=var, entry=entry, default_value=default_value, cli_arg=cli_arg):
 			if var.get():
 				entry.config(state=tk.NORMAL)
-				#debug_print(f"Checkbox checked: {cli_arg}, Current value: {entry.get()}")
+				debug_print(f"Checkbox checked: {cli_arg}, Current value: {entry.get()}")
 			else:
 				entry.config(state=tk.DISABLED)
 				entry.delete(0, tk.END)
 				entry.insert(0, str(default_value))
-				#debug_print(f"Checkbox unchecked: {cli_arg}, Default value: {default_value}")
+				debug_print(f"Checkbox unchecked: {cli_arg}, Default value: {default_value}")
 
 		var.trace_add("write", lambda *args, var=var, entry=entry, default_value=default_value, cli_arg=cli_arg: update_entry(var, entry, default_value, cli_arg))
 		row += 1
@@ -1051,10 +1018,10 @@ def edit_job_arguments_text(job):
 				entry_text = entries[arg].get().strip()
 				if entry_text:
 					new_job_args.append(f"{arg} {entry_text}")
-					#debug_print(f"Saving argument: {arg}, Value: {entry_text}")
+					debug_print(f"Saving argument: {arg}, Value: {entry_text}")
 
 		job['job_args'] = ' '.join(new_job_args)
-		#debug_print("Updated Job Args:", job['job_args'])
+		debug_print("Updated Job Args:", job['job_args'])
 
 		# Check for updated --processors to update job['processors']
 		if '--processors' in job['job_args']:
@@ -1102,7 +1069,6 @@ def select_job_file(parent, job, source_or_target):
 
 	if selected_paths:
 		remove_old_grid(job_id_hash, source_or_target)
-		check_if_needed(job, source_or_target)
 		update_paths(job, selected_paths, source_or_target)
 
 		if isinstance(job['sourcecache'], list):
@@ -1119,6 +1085,7 @@ def select_job_file(parent, job, source_or_target):
 				job['status'] = 'missing'
 
 		save_jobs(jobs_queue_file, jobs)
+		check_for_unneeded_media_cache
 		refresh_frame_listbox()
 
 def create_job_thumbnail(parent, job, source_or_target):
@@ -1127,14 +1094,14 @@ def create_job_thumbnail(parent, job, source_or_target):
 	grid_thumb_path = os.path.join(thumbnail_dir, image_ref_key)
 	if not os.path.exists(thumbnail_dir):
 		os.makedirs(thumbnail_dir)
-		#debug_print(f"Created thumbnail directory: {thumbnail_dir}")
+		debug_print(f"Created thumbnail directory: {thumbnail_dir}")
 
 	file_paths = job[source_or_target + 'cache']
 	file_paths = file_paths if isinstance(file_paths, list) else [file_paths]
 
 	for file_path in file_paths:
 		if not os.path.exists(file_path):
-			#debug_print(f"File not found: {file_path}")
+			debug_print(f"File not found: {file_path}")
 			button = Button(parent, text=f"File not found:\n\n {os.path.basename(file_path)}\nClick to update", bg='white', fg='black', command=lambda j=job: select_job_file(parent, j, source_or_target))
 			button.pack(pady=2, fill='x', expand=False)
 			return button
@@ -1462,10 +1429,15 @@ def get_values_from_FF(state_name):
 			ff_choices_dict = other_choice_dict
 
 	state_dict = preprocess_execution_providers(state_dict)
-	if default_values.get("log_level", []) == 'debug':
-		debugging = True
-	else: 
-		debugging = False
+	try:
+		debugging = (
+			current_values.get("log_level", []) == 'debug' or 
+			(not current_values.get("log_level", []) and default_values.get("log_level", []) == 'debug')
+		)
+	except NameError:
+		# Handle the case where current_values is not defined
+		debugging = default_values.get("log_level", []) == 'debug'
+
 	if debugging:
 		with open(os.path.join(working_dir, f"{state_name}.txt"), "w") as file:
 			for key, val in state_dict.items():
@@ -1493,23 +1465,28 @@ def get_values_from_FF(state_name):
 
 	return state_dict
 
+
+def custom_print(*msgs):
+	global last_justtextmsg, htmlmsg
+	message = " ".join(str(msg) for msg in msgs)
+	justtextmsg = re.sub(r'\033\[\d+m', '', message)
+	last_justtextmsg = justtextmsg
+	print(message)
+	# Log the plain text message
+	if last_justtextmsg != "":
+		logger.info('QueueItUp', last_justtextmsg)
+		logger.debug('QueueItUp', last_justtextmsg)
+		logger.warn('QueueItUp', last_justtextmsg)
+		logger.error('QueueItUp', last_justtextmsg)
+
 def debug_print(*msgs):
 	if debugging:
 		message = " ".join(str(msg) for msg in msgs)
 		justtextmsg = re.sub(r'\033\[\d+m', '', message)
 		last_justtextmsg = justtextmsg
-		custom_print(message)
+		print(message)
 		if not last_justtextmsg == "":
 			logger.debug('QueueItUp', last_justtextmsg)
-
-def custom_print(*msgs):
-	global last_justtextmsg
-	message = " ".join(str(msg) for msg in msgs)
-	justtextmsg = re.sub(r'\033\[\d+m', '', message)
-	last_justtextmsg = justtextmsg
-	print(message)
-	if not last_justtextmsg == "":
-		logger.info('QueueItUp', last_justtextmsg)
 
 def print_existing_jobs():
 	count_existing_jobs()
@@ -1520,11 +1497,7 @@ def print_existing_jobs():
 			message = f"{GREEN}There are {PENDING_JOBS_COUNT + JOB_IS_RUNNING} job(s) in the queue - Click Run Jobs to Execute Them, or continue adding more jobs to the queue{ENDC}"
 		else:
 			message = f"{YELLOW}There are No jobs in the queue - Click Add Job instead of Start{ENDC}"
-	justtextmsg = re.sub(r'\033\[\d+m', '', message)
-	last_justtextmsg = justtextmsg
-	if not last_justtextmsg == "":
-		logger.info('QueueItUp', last_justtextmsg)
-
+	custom_print(message)
 
 def count_existing_jobs():
 	global PENDING_JOBS_COUNT
@@ -1541,49 +1514,49 @@ def update_counters():
 
 
 def attempt_fix_json(content):
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError as e:
-        # Attempt to fix common issues
-        if "Expecting ',' delimiter" in str(e):
-            fixed_content = content.replace('\n', '').replace(',]', ']').replace(',}', '}')
-            try:
-                return json.loads(fixed_content)
-            except json.JSONDecodeError:
-                pass
-        if "Extra data" in str(e):
-            fixed_content = content.split('}', 1)[0] + '}'
-            try:
-                return json.loads(fixed_content)
-            except json.JSONDecodeError:
-                pass
-    return None
+	try:
+		return json.loads(content)
+	except json.JSONDecodeError as e:
+		# Attempt to fix common issues
+		if "Expecting ',' delimiter" in str(e):
+			fixed_content = content.replace('\n', '').replace(',]', ']').replace(',}', '}')
+			try:
+				return json.loads(fixed_content)
+			except json.JSONDecodeError:
+				pass
+		if "Extra data" in str(e):
+			fixed_content = content.split('}', 1)[0] + '}'
+			try:
+				return json.loads(fixed_content)
+			except json.JSONDecodeError:
+				pass
+	return None
 
 def create_and_verify_json(file_path):
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, "r") as json_file:
-                json.load(json_file)
-        except json.JSONDecodeError:
-            backup_path = file_path + ".bak"
-            shutil.copy(file_path, backup_path)
-            debug_print(f"Backup of corrupt JSON file saved as '{backup_path}'. Please check it for salvageable data.")
+	if os.path.exists(file_path):
+		try:
+			with open(file_path, "r") as json_file:
+				json.load(json_file)
+		except json.JSONDecodeError:
+			backup_path = file_path + ".bak"
+			shutil.copy(file_path, backup_path)
+			debug_print(f"Backup of corrupt JSON file saved as '{backup_path}'. Please check it for salvageable data.")
 
-            with open(file_path, "r") as json_file:
-                content = json_file.read()
-                fixed_data = attempt_fix_json(content)
-                if fixed_data is not None:
-                    with open(file_path, "w") as json_file:
-                        json.dump(fixed_data, json_file)
-                    debug_print(f"JSON file '{file_path}' was corrupt and has been repaired.")
-                else:
-                    with open(file_path, "w") as json_file:
-                        json.dump([], json_file)
-                    debug_print(f"Original JSON file '{file_path}' was corrupt and could not be repaired. It has been reset to an empty list.")
-    else:
-        with open(file_path, "w") as json_file:
-            json.dump([], json_file)
-        debug_print(f"JSON file '{file_path}' did not exist and has been created.")
+			with open(file_path, "r") as json_file:
+				content = json_file.read()
+				fixed_data = attempt_fix_json(content)
+				if fixed_data is not None:
+					with open(file_path, "w") as json_file:
+						json.dump(fixed_data, json_file)
+					debug_print(f"JSON file '{file_path}' was corrupt and has been repaired.")
+				else:
+					with open(file_path, "w") as json_file:
+						json.dump([], json_file)
+					debug_print(f"Original JSON file '{file_path}' was corrupt and could not be repaired. It has been reset to an empty list.")
+	else:
+		with open(file_path, "w") as json_file:
+			json.dump([], json_file)
+		debug_print(f"JSON file '{file_path}' did not exist and has been created.")
 
 
 def load_jobs(file_path):
@@ -1612,11 +1585,10 @@ def format_cli_value(value):
 
 def check_for_completed_failed_or_aborted_jobs():
 	jobs = load_jobs(jobs_queue_file)
-	print_existing_jobs()
 	for job in jobs:
 		if job['status'] == 'executing':
 			job['status'] = 'pending'
-			custom_print(f"{RED}A probable crash or aborted job execution was detected from your last use.... checking on status of unfinished jobs..{ENDC}")
+			print(f"{RED}A probable crash or aborted job execution was detected from your last use.... checking on status of unfinished jobs..{ENDC}")
 			source_basenames = ""
 			if isinstance(job['sourcecache'], list):
 				source_basenames = [os.path.basename(path) for path in job['sourcecache']]
@@ -1626,7 +1598,9 @@ def check_for_completed_failed_or_aborted_jobs():
 			save_jobs(jobs_queue_file, jobs)
 	if not keep_completed_jobs:
 		jobs_to_delete("completed")
-		custom_print(f"{BLUE}All completed jobs have been removed, if you would like to keep completed jobs change the setting to True{ENDC}")
+		print(f"{BLUE}All completed jobs have been removed, if you would like to keep completed jobs change the setting to True{ENDC}")
+	check_for_unneeded_media_cache()
+
 
 
 def sanitize_filename(filename):
@@ -1670,21 +1644,45 @@ def copy_to_media_cache(file_paths):
 	else:
 		return cached_paths	 # Return the list of paths
 
+def check_for_unneeded_thumbnail_cache():
+	if not os.path.exists(thumbnail_dir):
+		os.makedirs(thumbnail_dir)
+	thumb_files = os.listdir(thumbnail_dir)
+	jobs = load_jobs(jobs_queue_file)
+	# Create a set to store all needed thumbnail patterns from the jobs
+	needed_thumbnail_patterns = set()
+	
+	for job in jobs:
+		job_hash = job['hash']
+		# Add the hash pattern to the set of needed thumbnails
+		needed_thumbnail_patterns.add(f"{job_hash}.png")
 
+
+	# Delete thumbnails that do not match any needed pattern
+	for thumb_file in thumb_files:
+		if not any(thumb_file.endswith(pattern) for pattern in needed_thumbnail_patterns):
+			filesystem.remove_file(os.path.join(thumbnail_dir, thumb_file))
 
 def check_for_unneeded_media_cache():
 	if not os.path.exists(working_dir):
 		os.makedirs(working_dir)
 	if not os.path.exists(media_cache_dir):
 		os.makedirs(media_cache_dir)
-
-	# List all files in the media cache directory
+	
+	# List all files in the media cache and thumbnail directories
 	cache_files = os.listdir(media_cache_dir)
 	jobs = load_jobs(jobs_queue_file)
+	
 	# Create a set to store all needed filenames from the jobs
-	needed_files = set()
+	needed_files = set() 
+	
+	# Add 'completed' status to needed files if keep_completed_jobs is True
+	valid_statuses = {'pending', 'failed', 'missing', 'editing', 'archived', 'executing'}
+	if keep_completed_jobs:
+		valid_statuses.add('completed')
+	
 	for job in jobs:
-		if job['status'] in {'pending', 'failed', 'missing', 'editing', 'archived', 'executing'}:
+		if job['status'] in valid_statuses:
 			# Ensure sourcecache is a list
 			if job['sourcecache']:
 				for source_cache_path in job['sourcecache']:
@@ -1692,72 +1690,12 @@ def check_for_unneeded_media_cache():
 					needed_files.add(source_basename)
 			target_basename = os.path.basename(job['targetcache'])
 			needed_files.add(target_basename)
-
-	# Delete files that are not needed
+	
+	# Delete files in the media cache directory that are not needed
 	for cache_file in cache_files:
 		if cache_file not in needed_files:
 			filesystem.remove_file(os.path.join(media_cache_dir, cache_file))
-			#debug_print(f"{GREEN}Deleted unneeded temp mediacache file: {cache_file}{ENDC}")
-
-
-def check_if_needed(job, source_or_target):
-	if not os.path.exists(working_dir):
-		os.makedirs(working_dir)
-	if not os.path.exists(media_cache_dir):
-		os.makedirs(media_cache_dir)
-
-	with open(jobs_queue_file, 'r') as file:
-		jobs = json.load(file)
-
-	relevant_statuses = {'pending', 'executing', 'failed', 'missing', 'editing', 'archived'}
-	file_usage_counts = {}
-
-	# Create an index list for all jobs with relevant statuses and count file paths
-	for other_job in jobs:
-		if other_job['status'] in relevant_statuses:
-			for key in ['sourcecache', 'targetcache']:
-				paths = other_job[key] if isinstance(other_job[key], list) else [other_job[key]]
-				for path in paths:
-					if path is None:
-						continue  # Skip the current iteration if path is None
-					normalized_path = os.path.normpath(path)
-					file_usage_counts[normalized_path] = file_usage_counts.get(normalized_path, 0) + 1
-
-	# Check and handle sourcecache paths
-	if source_or_target in ['both', 'source']:
-		source_cache_paths = job['sourcecache'] if isinstance(job['sourcecache'], list) else [job['sourcecache']]
-		for source_cache_path in source_cache_paths:
-			if job['sourcecache']:
-				normalized_source_path = os.path.normpath(source_cache_path)
-				file_use_count = file_usage_counts.get(normalized_source_path, 0)
-				if file_use_count < 2:
-					if os.path.exists(normalized_source_path):
-						try:
-							filesystem.remove_file(normalized_source_path)
-							action_message = f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs"
-						except Exception as e:
-							action_message = f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}"
-					else:
-						action_message = f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist."
-				else:
-					action_message = f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_source_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job."
-	# Check and handle targetcache path
-	if source_or_target in ['both', 'target']:
-		target_cache_path = job['targetcache']
-		normalized_target_path = os.path.normpath(target_cache_path)
-		if file_usage_counts.get(normalized_target_path, 0) < 2:
-			if os.path.exists(normalized_target_path):
-				try:
-					filesystem.remove_file(normalized_target_path)
-					action_message = (f"Successfully deleted the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it is no longer needed by any other jobs\n\n")
-				except Exception as e:
-					action_message = (f"{RED}Failed to delete {YELLOW}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC}: {e}\n\n")
-			else:
-				action_message = (f"{BLUE}No need to delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it does not exist.\n\n")
-		else:
-			action_message = (f"{BLUE}Did not delete the file: {GREEN}{os.path.basename(normalized_target_path)} {YELLOW}from the Temporary Mediacache Directory{ENDC} as it's needed by another job.\n\n")
-		#debug_print(f"{action_message}\n\n")
-		# print_existing_jobs()
+	check_for_unneeded_thumbnail_cache()
 
 def preprocess_execution_providers(data):
 	new_data = data.copy()
@@ -1790,20 +1728,28 @@ if not os.path.exists(working_dir):
 if not os.path.exists(media_cache_dir):
 	os.makedirs(media_cache_dir)
 jobs_queue_file = os.path.normpath(os.path.join(working_dir, "jobs_queue.json"))
-	# ANSI Color Codes
-RED = '\033[91m'	 #use this
-GREEN = '\033[92m'	   #use this
-YELLOW = '\033[93m'		#use this
-BLUE = '\033[94m'	  #use this
-ENDC = '\033[0m'	   #use this	Resets color to default
+# ANSI Color Codes
+RED = '\033[91m'
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+BLUE = '\033[94m'
+ENDC = '\033[0m'
 
+# HTML Color Mapping
+COLOR_MAPPING = {
+	RED: '<span style="color:red;">',
+	GREEN: '<span style="color:green;">',
+	YELLOW: '<span style="color:orange;">',
+	BLUE: '<span style="color:blue;">',
+	ENDC: '</span>',
+}
 print(f"{BLUE}FaceFusion version: {GREEN}{facefusion_version}{ENDC}")
 print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
 
 default_values = get_values_from_FF("default_values")
 default_values['output_image_resolution'] = None
 default_values['output_video_resolution'] = None
-default_values['output_video_fps'] = 30
+default_values['output_video_fps'] = None
 settings_path = default_values.get("config_path", "")
 
 initialize_settings()
@@ -1824,22 +1770,23 @@ edit_queue_running = False
 
 
 PENDING_JOBS_COUNT = count_existing_jobs()
-last_justtextmsg = ""
 
 root = None
-pending_jobs_var = None
-
+pending_jobs_var = PENDING_JOBS_COUNT
+last_justtextmsg = (f"there are {PENDING_JOBS_COUNT} jobs in the queue")
+read_logs = (f"there are {PENDING_JOBS_COUNT} jobs in the queue")
 
 debug_print("FaceFusion Base Directory:", base_dir)
 debug_print("Working Directory:", working_dir)
 debug_print("Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
 print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
-print(f"QUEUEITUP{BLUE}  COLOR OUTPUT KEY")
+print(f"QUEUEITUP{BLUE}	 COLOR OUTPUT KEY")
 print(f"{BLUE}BLUE = normal color output key")
 print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 print(f"{YELLOW}YELLOW = informational")
-print(f"{RED}RED =[detected a Problem{ENDC}\n\n")
-print(f"{YELLOW}Checking Status{ENDC}\n")
+print(f"{RED}RED = detected a Problem")
+print(f"{YELLOW}Checking Status{ENDC}")
 check_for_completed_failed_or_aborted_jobs()
 print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
+print_existing_jobs()
