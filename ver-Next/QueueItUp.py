@@ -1444,7 +1444,7 @@ def get_values_from_FF(state_name):
 
 	state_dict = preprocess_execution_providers(state_dict)
 
-	debugging = state_dict.get("log_level", []) == 'debug'
+	debugging = state_dict.get("log_level", []) in ['debug', 'error', 'warn']
 	print(f"state_dict debugging {debugging}")
 
 	if debugging:
