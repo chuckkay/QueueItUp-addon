@@ -1,4 +1,7 @@
 import gradio
+
+from facefusion import state_manager
+from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_analyser, face_debugger_options, face_editor_options, face_enhancer_options, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, terminal, trim_frame, ui_workflow
 import os
 import re
 import sys
@@ -11,19 +14,16 @@ import shutil
 import tkinter as tk
 import threading
 import configparser
-from packaging import version
-from packaging.version import InvalidVersion
+# # # from packaging import version
+# # # from packaging.version import InvalidVersion
 import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
-from facefusion import metadata
 from facefusion.processors import choices as processors_choices
 from facefusion import choices as ff_choices
-from facefusion import logger,state_manager, filesystem
-from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_analyser, face_debugger_options, face_editor_options, face_enhancer_options, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, terminal, trim_frame, ui_workflow
 from facefusion.core import process_step
 from facefusion.jobs import job_runner as runqueuedjobs
-
-
+from facefusion import metadata
+from facefusion import logger, filesystem
 facefusion_version = metadata.get('version')
 queueitup_version = '2.7 --->  is  next->2.7 compatable post jobs versions'
 
@@ -87,6 +87,11 @@ def render() -> gradio.Blocks:
 					terminal.render()
 				with gradio.Blocks():
 					output.render()
+				with gradio.Blocks():
+					ui_workflow.render()
+					instant_runner.render()
+					job_runner.render()
+					job_manager.render()
 			with gradio.Column(scale = 3):
 				with gradio.Blocks():
 					preview.render()
@@ -103,11 +108,11 @@ def render() -> gradio.Blocks:
 
 def listen() -> None:
 	global EDIT_JOB_BUTTON
+	terminal.listen()
 	ADD_JOB_BUTTON.click(assemble_queue)
 	RUN_JOBS_BUTTON.click(execute_jobs)
 	EDIT_JOB_BUTTON.click(edit_queue_window)
 	processors.listen()
-	terminal.listen()
 	age_modifier_options.listen()
 	expression_restorer_options.listen()
 	face_debugger_options.listen()
@@ -152,7 +157,8 @@ def assemble_queue():
 	current_values = get_values_from_FF('current_values')
 
 	differences = {}
-	keys_to_skip = ["source_paths", "target_path", "output_path", "output_dir", "output_hash", "ui_layouts", "headless"]
+	keys_to_skip = ['command', 'jobs_path', 'open_browser', 'job_id', 'job_status', 'step_index', 'source_paths', 'target_path', 'output_path', 'ui_layouts', 'ui_workflow', 'config_path', 'force_download', 'skip_download']
+
 
 	for key, current_value in current_values.items():
 		if key in keys_to_skip:
@@ -175,10 +181,10 @@ def assemble_queue():
 
 	# Check if there's an extension to determine if it's a file path
 	if ext:
-		print(output_path)
+		debug_print(output_path)
 		output_path = os.path.dirname(output_path)
-		print("just fixed output path")
-		print(output_path)
+		debug_print("just fixed output path")
+		debug_print(output_path)
 
 	source_paths = current_values.get("source_paths", [])
 	target_path = current_values.get("target_path", "")
@@ -295,9 +301,9 @@ def execute_jobs():
 			os.makedirs(current_run_job['output_path'])
 		source_basenames = ""
 		if isinstance(current_run_job['sourcecache'], list):
-			source_basenames = f"with Source Files {', '.join(os.path.basename(path) for path in current_run_job['sourcecache'])}"
+			source_basenames = f"with Source Media {', '.join(os.path.basename(path) for path in current_run_job['sourcecache'])}"
 		elif current_run_job['sourcecache']:
-			source_basenames = f"with Source File {os.path.basename(current_run_job['sourcecache'])}"
+			source_basenames = f"with Source Media {os.path.basename(current_run_job['sourcecache'])}"
 		target_filetype, orig_video_length, output_video_length, output_dimensions, orig_dimensions = get_target_info(current_run_job['targetcache'], current_run_job)
 		if target_filetype == 'Video':
 			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - {GREEN}{source_basenames}\n{YELLOW} to -> the Target {orig_video_length} {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC}, \n which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
@@ -981,6 +987,7 @@ def edit_job_arguments_text(job):
 		value = ' '.join(value.split())	 # Normalize spaces
 		job_args_dict[arg] = value
 	skip_keys = ['--command', '--jobs-path', '--open-browser', '--job-id', '--job-status', '--step-index', '--source-paths', '--target-path', '--output-path', '--ui-layouts', '--ui-workflow', '--config-path', '--force-download', '--skip-download']
+
 	for arg, default_value in default_values.items():
 		cli_arg = '--' + arg.replace('_', '-')
 		if cli_arg in skip_keys:
@@ -1270,12 +1277,12 @@ def RUN_job_args(current_run_job):
 			arg_source_paths = f"-s \"{current_run_job['sourcecache']}\""
 		else:
 			arg_source_paths = ""
-	print(arg_source_paths)
+	debug_print(arg_source_paths)
 	arg_target_path = f"-t \"{current_run_job['targetcache']}\""
-	print(arg_target_path)
+	debug_print(arg_target_path)
 	clioutputname = current_run_job['full_output_path']
 	arg_output_path = f"-o \"{clioutputname}\""
-	print(arg_output_path)
+	debug_print(arg_output_path)
 	simulated_args = f"{arg_source_paths} {arg_target_path} {arg_output_path} {current_run_job['job_args']}"
 	simulated_cmd = simulated_args.replace('\\\\', '\\')
 	process = subprocess.Popen(f"python facefusion.py job-create {current_run_job['id']}")
@@ -1436,14 +1443,9 @@ def get_values_from_FF(state_name):
 			ff_choices_dict = other_choice_dict
 
 	state_dict = preprocess_execution_providers(state_dict)
-	try:
-		debugging = (
-			current_values.get("log_level", []) == 'debug' or 
-			(not current_values.get("log_level", []) and default_values.get("log_level", []) == 'debug')
-		)
-	except NameError:
-		# Handle the case where current_values is not defined
-		debugging = default_values.get("log_level", []) == 'debug'
+
+	debugging = state_dict.get("log_level", []) == 'debug'
+	print(f"state_dict debugging {debugging}")
 
 	if debugging:
 		with open(os.path.join(working_dir, f"{state_name}.txt"), "w") as file:
@@ -1474,7 +1476,7 @@ def get_values_from_FF(state_name):
 
 
 def custom_print(*msgs):
-	global last_justtextmsg, htmlmsg
+	global last_justtextmsg
 	message = " ".join(str(msg) for msg in msgs)
 	justtextmsg = re.sub(r'\033\[\d+m', '', message)
 	last_justtextmsg = justtextmsg
@@ -1482,9 +1484,7 @@ def custom_print(*msgs):
 	# Log the plain text message
 	if last_justtextmsg != "":
 		logger.info(' \n ', last_justtextmsg)
-		logger.debug(' \n ', last_justtextmsg)
-		logger.warn(' \n ', last_justtextmsg)
-		logger.error(' \n ', last_justtextmsg)
+
 
 def debug_print(*msgs):
 	if debugging:
@@ -1493,7 +1493,7 @@ def debug_print(*msgs):
 		last_justtextmsg = justtextmsg
 		print(message)
 		if not last_justtextmsg == "":
-			logger.debug('QueueItUp', last_justtextmsg)
+			logger.debug('QueueItUp Debug', last_justtextmsg)
 
 def print_existing_jobs():
 	count_existing_jobs()
@@ -1754,9 +1754,7 @@ print(f"{BLUE}FaceFusion version: {GREEN}{facefusion_version}{ENDC}")
 print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
 
 default_values = get_values_from_FF("default_values")
-default_values['output_image_resolution'] = None
-default_values['output_video_resolution'] = None
-default_values['output_video_fps'] = None
+
 settings_path = default_values.get("config_path", "")
 
 initialize_settings()
