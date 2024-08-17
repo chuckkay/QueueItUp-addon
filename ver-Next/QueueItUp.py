@@ -1,7 +1,7 @@
 import gradio
 
 from facefusion import state_manager
-from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_analyser, face_debugger_options, face_editor_options, face_enhancer_options, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, terminal, trim_frame, ui_workflow
+from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_debugger_options, face_detector, face_editor_options, face_enhancer_options, face_landmarker, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, terminal, trim_frame, ui_workflow
 import os
 import re
 import sys
@@ -25,7 +25,7 @@ from facefusion.jobs import job_runner as runqueuedjobs
 from facefusion import metadata
 from facefusion import logger, filesystem
 facefusion_version = metadata.get('version')
-queueitup_version = '2.7 --->  is  next->2.7 compatable post jobs versions'
+queueitup_version = '3.0 '
 
 def pre_check() -> bool:
 	return True
@@ -102,13 +102,14 @@ def render() -> gradio.Blocks:
 				with gradio.Blocks():
 					face_masker.render()
 				with gradio.Blocks():
-					face_analyser.render()
+					face_detector.render()
+				with gradio.Blocks():
+					face_landmarker.render()
 	return layout
 
 
 def listen() -> None:
 	global EDIT_JOB_BUTTON
-	terminal.listen()
 	ADD_JOB_BUTTON.click(assemble_queue)
 	RUN_JOBS_BUTTON.click(execute_jobs)
 	EDIT_JOB_BUTTON.click(edit_queue_window)
@@ -131,11 +132,13 @@ def listen() -> None:
 	source.listen()
 	target.listen()
 	output.listen()
+	terminal.listen()
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
 	face_masker.listen()
-	face_analyser.listen()
+	face_detector.listen()
+	face_landmarker.listen()
 	common_options.listen()
 
 
@@ -470,14 +473,14 @@ def edit_queue_window():
 			root.after(20, lambda: root.attributes('-topmost', True))
 			root.after(30, lambda: root.attributes('-topmost', False))
 
-			print_existing_jobs()
+			count_existing_jobs()
 		else:
 			edit_queue()
-			print_existing_jobs()
+			count_existing_jobs()
 	except tk.TclError as e:
 		root = None
 		edit_queue()
-		print_existing_jobs()
+		count_existing_jobs()
 
 def edit_queue():
 	global root, edit_queue_running, frame, canvas, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
@@ -821,7 +824,7 @@ def update_job_listbox():
 		canvas.config(scrollregion=canvas.bbox("all"))
 
 	except tk.TclError as e:
-		debug_print(e)
+		debug_print("TclError")
 
 def refresh_buttonclick():
 	count_existing_jobs()
@@ -1445,6 +1448,7 @@ def get_values_from_FF(state_name):
 	state_dict = preprocess_execution_providers(state_dict)
 
 	debugging = state_dict.get("log_level", []) in ['debug', 'error', 'warn']
+
 	print(f"state_dict debugging {debugging}")
 
 	if debugging:
