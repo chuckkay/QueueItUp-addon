@@ -1417,8 +1417,8 @@ def get_values_from_FF(state_name):
 	processors_choices_dict = {}
 	ff_choices_dict = {}
 	# Get the state context and state dictionary
-	state_context = state_manager.detect_state_context()
-	state = state_manager.STATES[state_context]
+	app_context = state_manager.detect_app_context()
+	state = state_manager.STATES[app_context]
 
 	# Process state dictionary
 	for key, value in state.items():
