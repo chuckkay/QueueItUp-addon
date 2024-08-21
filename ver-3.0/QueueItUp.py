@@ -14,8 +14,6 @@ import shutil
 import tkinter as tk
 import threading
 import configparser
-# # # from packaging import version
-# # # from packaging.version import InvalidVersion
 import subprocess
 from tkinter import filedialog, font, Toplevel, messagebox, PhotoImage, Scrollbar, Button
 from facefusion.processors import choices as processors_choices
@@ -42,6 +40,10 @@ def render() -> gradio.Blocks:
 			with gradio.Column(scale = 2):
 				with gradio.Blocks():
 					ABOUT.render()
+				with gradio.Blocks():
+					ADD_JOB_BUTTON.render()
+					EDIT_JOB_BUTTON.render()
+					RUN_JOBS_BUTTON.render()
 				with gradio.Blocks():
 					processors.render()
 				with gradio.Blocks():
@@ -79,10 +81,7 @@ def render() -> gradio.Blocks:
 					source.render()
 				with gradio.Blocks():
 					target.render()
-				with gradio.Blocks():
-					ADD_JOB_BUTTON.render()
-					EDIT_JOB_BUTTON.render()
-					RUN_JOBS_BUTTON.render()
+
 				with gradio.Blocks():
 					terminal.render()
 				with gradio.Blocks():
@@ -132,6 +131,9 @@ def listen() -> None:
 	source.listen()
 	target.listen()
 	output.listen()
+	instant_runner.listen()
+	job_runner.listen()
+	job_manager.listen()
 	terminal.listen()
 	preview.listen()
 	trim_frame.listen()
@@ -157,6 +159,7 @@ def assemble_queue():
 	if missing_paths:
 		whats_missing = ", ".join(missing_paths)
 		custom_print(f"{RED}Whoops!!!, you are missing {whats_missing}. Make sure you add {whats_missing} before clicking add job{ENDC}")
+		return
 	current_values = get_values_from_FF('current_values')
 
 	differences = {}
@@ -274,10 +277,10 @@ def execute_jobs():
 	count_existing_jobs()
 	if not PENDING_JOBS_COUNT + JOB_IS_RUNNING > 0:
 		custom_print(f"{RED}Whoops!!!, {YELLOW}There are {PENDING_JOBS_COUNT} Job(s) queued.{ENDC} Add a job to the queue before pressing Run Jobs.")
-
+		return
 	if PENDING_JOBS_COUNT + JOB_IS_RUNNING > 0 and JOB_IS_RUNNING:
 		custom_print(f"{RED}Whoops {YELLOW}a Job is already executing, with {PENDING_JOBS_COUNT} more job(s) waiting to be processed. {RED}You don't want more than one job running at the same time your GPU can't handle that,{YELLOW}\n You just need to click add job if jobs are already running, and the job will be placed in line for execution. you can edit the job order with Edit Queue button{ENDC}")
-
+		return
 	jobs = load_jobs(jobs_queue_file)
 	JOB_IS_RUNNING = 1
 	CURRENT_JOB_NUMBER = 0
@@ -619,7 +622,7 @@ def batch_job(job):
 					path = copy_to_media_cache(path)
 					add_new_job['targetcache'] = path
 					update_paths(add_new_job, path, 'target')
-					# update_paths(add_new_job, path, 'output')
+					# update_paths(add_new_job, path, 'outputpath')
 					debug_print(f"{YELLOW} target - {GREEN}{add_new_job['targetcache']}{YELLOW} copied to temp media cache dir{ENDC}")
 					original_index += 1	 # Increment the index for each new job
 					jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
@@ -927,7 +930,7 @@ def output_path_job(job):
 	if selected_path:
 		formatted_path = selected_path.replace('/', '\\')
 		job['output_path'] = formatted_path
-		update_paths(job, formatted_path, 'output')
+		update_paths(job, formatted_path, 'outputpath')
 	save_jobs(jobs_queue_file, jobs)
 
 def delete_job(job):
@@ -1242,7 +1245,7 @@ def update_paths(job, path, source_or_target):
 		target_name, _ = os.path.splitext(os.path.basename(job[cache_key]))
 		job['target_name'] = target_name
 
-	if source_or_target == 'output':
+	if source_or_target == 'outputpath':
 		cache_key = 'output_path'
 		job[cache_key] = path
 
@@ -1488,6 +1491,7 @@ def custom_print(*msgs):
 	# Log the plain text message
 	if last_justtextmsg != "":
 		logger.info(' \n ', last_justtextmsg)
+		logger.debug('QueueItUp Debug', last_justtextmsg)
 
 
 def debug_print(*msgs):
