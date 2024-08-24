@@ -4,6 +4,7 @@ import cv2
 import numpy
 from tqdm import tqdm
 
+
 from facefusion import inference_manager, state_manager, wording
 from facefusion.download import conditional_download_hashes, conditional_download_sources
 from facefusion.filesystem import resolve_relative_path
