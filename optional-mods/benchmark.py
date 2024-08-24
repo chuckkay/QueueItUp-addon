@@ -66,6 +66,7 @@ def render() -> gradio.Blocks:
 					benchmark.render()
 				with gradio.Blocks():
 					terminal.render()
+					#add terminal in webui
 	return layout
 
 
