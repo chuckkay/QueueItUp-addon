@@ -163,7 +163,7 @@ def assemble_queue():
 	current_values = get_values_from_FF('current_values')
 
 	differences = {}
-	keys_to_skip = ['command', 'jobs_path', 'open_browser', 'job_id', 'job_status', 'step_index', 'source_paths', 'target_path', 'output_path', 'ui_layouts', 'ui_workflow', 'config_path', 'force_download', 'skip_download']
+	keys_to_skip = ['command', 'jobs_path', 'open_browser', 'job_id', 'job_status', 'step_index', 'source_paths', 'target_path', 'output_path', 'ui_layouts', 'ui_workflow', 'config_path', 'force_download', 'skip_download', 'execution_queue_count', 'video_memory_strategy', 'system_memory_limit', 'execution_thread_count', 'execution_providers', 'execution_device_id']
 
 
 	for key, current_value in current_values.items():
@@ -548,11 +548,24 @@ def edit_queue():
 	completed_jobs_button.pack(pady=5)
 
 	refresh_frame_listbox()
-	root.protocol("WM_DELETE_WINDOW", close_window)
+	root.protocol("WM_DELETE_WINDOW", close_edit_queue)
 	root.mainloop()
 	root = None	 # Ensure root is set to None when the window is closed
 	edit_queue_running = False	# Reset the running state
 
+def close_edit_queue():
+	global edit_queue_running
+	edit_queue_running = False
+
+	# Explicitly clean up any Tkinter variables here if possible
+	# Example: my_var = None
+
+	# Withdraw the window to prevent immediate destruction
+	root.withdraw()
+
+	# Destroy the window after a slight delay to ensure the main loop can process it
+	root.after(100, root.destroy)
+	
 def run_jobs_click():
 	save_jobs(jobs_queue_file, jobs)
 	threading.Thread(target=execute_jobs).start()  # Run execute_jobs in a separate thread
@@ -843,12 +856,14 @@ def refresh_frame_listbox():
 	update_job_listbox()
 
 def close_window():
-	global root
+	global root, edit_queue_running
 	save_jobs(jobs_queue_file, jobs)
 	edit_queue_running = False
 	if root:
-		root.destroy()
+		root.withdraw()
 
+		# Destroy the window after a slight delay to ensure the main loop can process it
+		root.after(100, root.destroy)
 def make_job_pending(job):
 	job['status'] = 'pending'
 	save_jobs(jobs_queue_file, jobs)
@@ -992,7 +1007,7 @@ def edit_job_arguments_text(job):
 		arg, value = match.groups()
 		value = ' '.join(value.split())	 # Normalize spaces
 		job_args_dict[arg] = value
-	skip_keys = ['--command', '--jobs-path', '--open-browser', '--job-id', '--job-status', '--step-index', '--source-paths', '--target-path', '--output-path', '--ui-layouts', '--ui-workflow', '--config-path', '--force-download', '--skip-download']
+	skip_keys = ['--command', '--jobs-path', '--open-browser', '--execution-providers', '--job-id', '--job-status', '--step-index', '--source-paths', '--target-path', '--output-path', '--ui-layouts', '--ui-workflow', '--config-path', '--force-download', '--skip-download', '--execution-queue-count', '--video-memory-strategy', '--system-memory-limit', '--execution-thread-count', '--execution-providers', '--execution-device-id']
 
 	for arg, default_value in default_values.items():
 		cli_arg = '--' + arg.replace('_', '-')
@@ -1271,10 +1286,10 @@ def RUN_job_args(current_run_job):
 	completed_path = os.path.join(state_manager.get_item('jobs_path'), 'completed', f"{current_run_job['id']}.json")
 
 	#add code if any of these files failed_path or draft_path or queued_path exist then delete it
+
 	for path in [failed_path, draft_path, queued_path]:
 		if os.path.exists(path):
 			os.remove(path)
-
 
 	if isinstance(current_run_job['sourcecache'], list):
 		arg_source_paths = ' '.join(f'-s "{p}"' for p in current_run_job['sourcecache'])
@@ -1448,8 +1463,6 @@ def get_values_from_FF(state_name):
 		elif other_choice is ff_choices:
 			ff_choices_dict = other_choice_dict
 
-	state_dict = preprocess_execution_providers(state_dict)
-
 	debugging = state_dict.get("log_level", []) in ['debug', 'error', 'warn']
 
 	print(f"state_dict debugging {debugging}")
@@ -1619,11 +1632,20 @@ def check_for_completed_failed_or_aborted_jobs():
 
 
 def sanitize_filename(filename):
+	max_length=25
 	valid_chars = "-_.()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	sanitized = ''.join(c if c in valid_chars else '_' for c in filename)
 	sanitized = sanitized.strip()  # Remove leading and trailing spaces
+	
+	# Ensure the basename is limited to max_length
+	if len(sanitized) > max_length:
+		base_name, ext = os.path.splitext(sanitized)
+		if len(ext) > max_length:
+			sanitized = sanitized[:max_length]	# If the extension alone exceeds max_length, truncate
+		else:
+			sanitized = base_name[:max_length - len(ext)] + ext
+	
 	return sanitized
-
 
 def copy_to_media_cache(file_paths):
 	if not os.path.exists(working_dir):
@@ -1712,21 +1734,7 @@ def check_for_unneeded_media_cache():
 			filesystem.remove_file(os.path.join(media_cache_dir, cache_file))
 	check_for_unneeded_thumbnail_cache()
 
-def preprocess_execution_providers(data):
-	new_data = data.copy()
-	for key, value in new_data.items():
-		if key == "execution_providers":
-			new_providers = []
-			for provider in value:
-				if provider == "cuda" or provider == "CUDAExecutionProvider":
-					new_providers.append('cuda')
-				elif provider == "cpu" or provider == "CPUExecutionProvider":
-					new_providers.append('cpu')
-				elif provider == "coreml" or provider == "CoreMLExecutionProvider":
-					new_providers.append('coreml')
-				# Assuming you don't want to keep original values that don't match, skip the else clause
-			new_data[key] = new_providers  # Replace the old list with the new one
-	return new_data
+
 
 #startup_init_checks_and_cleanup, Globals and toggles
 script_root = os.path.dirname(os.path.abspath(__file__))
@@ -1794,7 +1802,7 @@ debug_print("Working Directory:", working_dir)
 debug_print("Media Cache Directory:", media_cache_dir)
 debug_print("Jobs Queue File:", jobs_queue_file)
 print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
-print(f"QUEUEITUP{BLUE}  COLOR OUTPUT KEY")
+print(f"QUEUEITUP{BLUE}	 COLOR OUTPUT KEY")
 print(f"{BLUE}BLUE = normal color output key")
 print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 print(f"{YELLOW}YELLOW = informational")
