@@ -70,7 +70,7 @@ def extract_frames(target_path: str, temp_video_resolution: str, temp_video_fps:
 
 	# Run ffmpeg and monitor progress
 	process = subprocess.Popen(['ffmpeg'] + commands, stderr=subprocess.PIPE, text=True)
-	pbar = tqdm(total=frame_count, desc="Extracting frames")
+	pbar = tqdm(total=frame_count, desc="Extracting frames", unit = 'frame', ascii = ' =')
 	frame_re = re.compile(r'frame=\s*(\d+)')
 	previous_frame = 0
 
@@ -133,7 +133,7 @@ def merge_video(target_path: str, output_video_resolution: str, output_video_fps
 
 	# Run ffmpeg and monitor progress
 	process = subprocess.Popen(['ffmpeg'] + commands, stderr=subprocess.PIPE, text=True)
-	pbar = tqdm(total=frame_count, desc="Merging video")
+	pbar = tqdm(total=frame_count, desc="Merging video", unit = 'frame', ascii = ' =')
 	frame_re = re.compile(r'frame=\s*(\d+)')
 	previous_frame = 0
 
