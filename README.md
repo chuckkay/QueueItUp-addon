@@ -16,6 +16,7 @@ This is it—at least until Henry releases the official queueing feature for Fac
    `ui_layouts = QueueItUp default benchmark webcam`
 That’s it!
 QueueItUp is a self-contained add-on that keeps all its components in a folder called QueueItUp in your Facefusion root directory.
+
 **Features of QueueItUp:**
 
 **Job Queueing:** Below the normal start button in the Facefusion web UI, you will find a queue status box and three buttons: ADD JOB, RUN QUEUE, and EDIT QUEUE. They do exactly what they say. Although the ADD JOB and RUN QUEUE might seem redundant and could be removed in future versions, they currently serve a purpose. Once you've added some jobs and clicked RUN QUEUE, it will start processing all the swaps in order, but you're not stuck waiting. Build more jobs, and when you click ADD JOB, if the queue is still processing other jobs, any additional jobs will be added to the back of the queue and will execute when their turn comes. This was a huge addition I made, as I could launch a bunch of jobs, work on some more, add them to the back of the line and go to bed. In the morning, they are all done—LOL.
