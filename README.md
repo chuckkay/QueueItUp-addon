@@ -11,7 +11,8 @@ This is it—at least until Henry releases the official queueing feature for Fac
 **How to Install:**
 1. Download QueueItUp.py.
 2. Drop it in your `facefusion\facefusion\uis\layouts` directory.
-3. In facefusion.ini, change the last line to `ui_layouts = QueueItUp`, or just run `python run.py --ui-layouts QueueItUp`.
+3. In facefusion.ini, change the last line to `ui_layouts = QueueItUp`.
+   or if you want multiple tabs change it to something like this  `ui_layouts = QueueItUp default benchmark webcam`
 That’s it!
 QueueItUp is a self-contained add-on that keeps all its components in a folder called QueueItUp in your Facefusion root directory.
 **Features of QueueItUp:**
