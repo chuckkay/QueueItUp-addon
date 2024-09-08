@@ -1312,8 +1312,8 @@ def RUN_job_args(current_run_job):
 	process.wait()	# Wait for process to complete
 	process = subprocess.Popen(f"python facefusion.py job-submit {current_run_job['id']}")
 	process.wait()	# Wait for process to complete
-	# runqueuedjobs.run_job((current_run_job['id']), process_step)
-	runqueuedjobs.run_jobs(process_step)
+	runqueuedjobs.run_job((current_run_job['id']), process_step)
+	#runqueuedjobs.run_jobs(process_step)
 	#process = subprocess.Popen(f"python facefusion.py job-run {current_run_job['id']}", stdout=subprocess.PIPE)
 	#process.wait()
 
