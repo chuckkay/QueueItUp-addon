@@ -37,7 +37,7 @@ def render() -> gradio.Blocks:
 	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, SETTINGS_BUTTON
 	with gradio.Blocks() as layout:
 		with gradio.Row():
-			with gradio.Column(scale = 2):
+			with gradio.Column(scale = 4):
 				with gradio.Blocks():
 					ABOUT.render()
 				with gradio.Blocks():
@@ -76,7 +76,7 @@ def render() -> gradio.Blocks:
 					output_options.render()
 				with gradio.Blocks():
 					common_options.render()
-			with gradio.Column(scale = 2):
+			with gradio.Column(scale = 4):
 				with gradio.Blocks():
 					source.render()
 				with gradio.Blocks():
@@ -91,12 +91,10 @@ def render() -> gradio.Blocks:
 					instant_runner.render()
 					job_runner.render()
 					job_manager.render()
-			with gradio.Column(scale = 3):
+			with gradio.Column(scale = 7):
 				with gradio.Blocks():
 					preview.render()
-				with gradio.Blocks():
 					trim_frame.render()
-				with gradio.Blocks():
 					face_selector.render()
 				with gradio.Blocks():
 					face_masker.render()
@@ -145,7 +143,7 @@ def listen() -> None:
 
 
 def run(ui : gradio.Blocks) -> None:
-	ui.launch(show_api = False, inbrowser = state_manager.get_item('open_browser'))
+	ui.launch(favicon_path = 'facefusion.ico', inbrowser = state_manager.get_item('open_browser'))
 
 
 def assemble_queue():
