@@ -1775,7 +1775,7 @@ initialize_settings()
 create_and_verify_json(jobs_queue_file)
 
 thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
-ABOUT = gradio.Button(value = 'QUEUEITUP', variant = 'primary', link = 'https://github.com/chuckkay')
+ABOUT = gradio.Button(value = 'QUEUEITUP 3.0', variant = 'primary', link = 'https://github.com/chuckkay/QueueItUp-addon')
 ADD_JOB_BUTTON = gradio.Button("Add Job ", variant="primary")
 RUN_JOBS_BUTTON = gradio.Button("Run Jobs", variant="primary")
 EDIT_JOB_BUTTON = gradio.Button("Edit Jobs")
