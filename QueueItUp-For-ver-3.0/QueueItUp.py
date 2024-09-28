@@ -1,7 +1,6 @@
 import gradio
-
 from facefusion import state_manager
-from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_debugger_options, face_detector, face_editor_options, face_enhancer_options, face_landmarker, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, terminal, trim_frame, ui_workflow
+from facefusion.uis.components import about, age_modifier_options, common_options, execution, execution_queue_count, execution_thread_count, expression_restorer_options, face_debugger_options, face_detector, face_editor_options, face_enhancer_options, face_landmarker, face_masker, face_selector, face_swapper_options, frame_colorizer_options, frame_enhancer_options, instant_runner, job_manager, job_runner, lip_syncer_options, memory, output, output_options, preview, processors, source, target, temp_frame, trim_frame, ui_workflow
 import os
 import re
 import sys
@@ -83,8 +82,6 @@ def render() -> gradio.Blocks:
 					target.render()
 
 				with gradio.Blocks():
-					terminal.render()
-				with gradio.Blocks():
 					output.render()
 				with gradio.Blocks():
 					ui_workflow.render()
@@ -93,8 +90,11 @@ def render() -> gradio.Blocks:
 					job_manager.render()
 			with gradio.Column(scale = 7):
 				with gradio.Blocks():
+
 					preview.render()
+				with gradio.Blocks():
 					trim_frame.render()
+				with gradio.Blocks():
 					face_selector.render()
 				with gradio.Blocks():
 					face_masker.render()
@@ -132,7 +132,6 @@ def listen() -> None:
 	instant_runner.listen()
 	job_runner.listen()
 	job_manager.listen()
-	terminal.listen()
 	preview.listen()
 	trim_frame.listen()
 	face_selector.listen()
@@ -144,7 +143,6 @@ def listen() -> None:
 
 def run(ui : gradio.Blocks) -> None:
 	ui.launch(favicon_path = 'facefusion.ico', inbrowser = state_manager.get_item('open_browser'))
-
 
 def assemble_queue():
 	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, default_values, current_values
@@ -894,10 +892,10 @@ def remove_old_grid(job_id_hash, source_or_target):
 def archive_job(job):
 	if job['status'] == 'archived':
 		job['status'] = 'pending'
-		custom_print(f"{YELLOW} Job Un-Archived{ENDC}")
+		custom_print(f"{YELLOW} Job Un-Archived - {GREEN}{job['id']} {ENDC}")
 	else:
 		job['status'] = 'archived'
-		custom_print(f"{YELLOW} Job Archived{ENDC}")
+		custom_print(f"{YELLOW} Job Archived - {GREEN}{job['id']}{ENDC}")
 	save_jobs(jobs_queue_file, jobs)
 	print_existing_jobs()
 	refresh_frame_listbox()
@@ -1310,8 +1308,9 @@ def RUN_job_args(current_run_job):
 	process.wait()	# Wait for process to complete
 	process = subprocess.Popen(f"python facefusion.py job-submit {current_run_job['id']}")
 	process.wait()	# Wait for process to complete
-	runqueuedjobs.run_job((current_run_job['id']), process_step)
-	#runqueuedjobs.run_jobs(process_step)
+	import facefusion.jobs.job_runner
+	# job_runner.run(job-run, (current_run_job['id']), process_step)
+	facefusion.jobs.job_runner.run_job((current_run_job['id']), process_step)
 	#process = subprocess.Popen(f"python facefusion.py job-run {current_run_job['id']}", stdout=subprocess.PIPE)
 	#process.wait()
 
@@ -1775,10 +1774,10 @@ initialize_settings()
 create_and_verify_json(jobs_queue_file)
 
 thumbnail_dir = os.path.normpath(os.path.join(working_dir, "thumbnails"))
-ABOUT = gradio.Button(value = 'QUEUEITUP 3.0', variant = 'primary', link = 'https://github.com/chuckkay/QueueItUp-addon')
-ADD_JOB_BUTTON = gradio.Button("Add Job ", variant="primary")
-RUN_JOBS_BUTTON = gradio.Button("Run Jobs", variant="primary")
-EDIT_JOB_BUTTON = gradio.Button("Edit Jobs")
+ABOUT = gradio.Button(value = 'About QUEUEITUP 3.0', link = 'https://github.com/chuckkay/QueueItUp-addon')
+ADD_JOB_BUTTON = gradio.Button("Add Job to QueueItUp", variant="primary")
+RUN_JOBS_BUTTON = gradio.Button("Run QueueItUp Jobs", variant="primary")
+EDIT_JOB_BUTTON = gradio.Button("Edit QueueItUp Jobs")
 SETTINGS_BUTTON = gradio.Button("Change Settings")
 JOB_IS_RUNNING = 0
 JOB_IS_EXECUTING = 0
@@ -1795,17 +1794,17 @@ pending_jobs_var = None
 last_justtextmsg = (f"there are {PENDING_JOBS_COUNT} jobs in the queue")
 read_logs = (f"there are {PENDING_JOBS_COUNT} jobs in the queue")
 
-debug_print("FaceFusion Base Directory:", base_dir)
-debug_print("Working Directory:", working_dir)
-debug_print("Media Cache Directory:", media_cache_dir)
-debug_print("Jobs Queue File:", jobs_queue_file)
+# debug_print("FaceFusion Base Directory:", base_dir)
+# debug_print("Working Directory:", working_dir)
+# debug_print("Media Cache Directory:", media_cache_dir)
+# debug_print("Jobs Queue File:", jobs_queue_file)
 print(f"{BLUE}Welcome Back To QueueItUp The FaceFusion Queueing Addon{ENDC}\n\n")
 print(f"QUEUEITUP{BLUE}	 COLOR OUTPUT KEY")
 print(f"{BLUE}BLUE = normal color output key")
 print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 print(f"{YELLOW}YELLOW = informational")
 print(f"{RED}RED = detected a Problem")
-print(f"{YELLOW}Checking Status{ENDC}")
+print(f"{YELLOW}Checking Status{ENDC}\n\n")
 check_for_completed_failed_or_aborted_jobs()
 print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
 print_existing_jobs()
