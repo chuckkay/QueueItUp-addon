@@ -1,4 +1,8 @@
- **QueueItUp 3.0** Now with added clone it and BatchItUp feature
+ **QueueItUp 3.0** Now with added clone it and BatchItUp feature For Facefusion 3.0, 
+ this is an Addon was originally made to enable the queueing of jobs in facefusion, 
+ but now that Facefusion 3.0 has jobs functionalaity, QueueItUp serves as a less integrated queuing alternative, as a simple dropin addon, with a few extra features inside of the Edit Queue window, like
+ thumbnails of the jobs you make in queueitup, ability to batch jobs and clone jobs... plus output file naming includes source and target name for referance.  
+ if there are any other features you are looking for please submit them in the issues tab on github and i will see if i can add them..
  
 <img width="1679" alt="Screenshot 2024-05-09 110834" src="https://github.com/chuckkay/QueueItUp/assets/10617746/ebf49e9b-04f6-4373-9c33-636dd43e23da">
 
