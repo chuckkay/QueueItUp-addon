@@ -28,10 +28,6 @@ def pre_check() -> bool:
 	return True
 
 
-def pre_render() -> bool:
-	return True
-
-
 def render() -> gradio.Blocks:
 	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, SETTINGS_BUTTON
 	with gradio.Blocks() as layout:
