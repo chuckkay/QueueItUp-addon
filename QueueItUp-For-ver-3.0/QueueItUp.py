@@ -26,6 +26,9 @@ queueitup_version = '3.0 '
 
 def pre_check() -> bool:
 	return True
+	
+def pre_render() -> bool:
+	return True
 
 def render() -> gradio.Blocks:
 	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, SETTINGS_BUTTON
