@@ -26,9 +26,11 @@ queueitup_version = '3.0 '
 
 def pre_check() -> bool:
 	return True
-	
+
+
 def pre_render() -> bool:
 	return True
+
 
 def render() -> gradio.Blocks:
 	global ADD_JOB_BUTTON, RUN_JOBS_BUTTON, SETTINGS_BUTTON
@@ -157,7 +159,7 @@ def assemble_queue():
 	current_values = get_values_from_FF('current_values')
 
 	differences = {}
-	keys_to_skip = ['command', 'jobs_path', 'open_browser', 'job_id', 'job_status', 'step_index', 'source_paths', 'target_path', 'output_path', 'ui_layouts', 'ui_workflow', 'config_path', 'force_download', 'skip_download', 'execution_queue_count', 'video_memory_strategy', 'system_memory_limit', 'execution_thread_count', 'execution_providers', 'execution_device_id']
+	keys_to_skip = ['command', 'jobs_path', 'open_browser', 'download_providers', 'job_id', 'job_status', 'step_index', 'source_paths', 'target_path', 'output_path', 'source_pattern', 'target_pattern', 'output_pattern', 'ui_layouts', 'ui_workflow', 'config_path', 'force_download', 'skip_download', 'execution_queue_count', 'video_memory_strategy', 'system_memory_limit', 'execution_thread_count', 'execution_providers', 'execution_device_id']
 
 
 	for key, current_value in current_values.items():
@@ -211,7 +213,7 @@ def assemble_queue():
 	else:
 		outputname = target_name
 	queueitup_job_id = outputname + '-' + output_hash
-	full_output_path =	os.path.join(output_path, queueitup_job_id + output_extension)
+	full_output_path = os.path.join(output_path, queueitup_job_id + output_extension)
 
 	# Construct the arguments string
 	arguments = " ".join(f"--{key.replace('_', '-')} {value}" for key, value in differences.items() if value)
@@ -249,9 +251,9 @@ def assemble_queue():
 			for key, val in current_values.items():
 				file.write(f"{key}: {val}\n")
 
-	# if not found_editing:
 	jobs = load_jobs(jobs_queue_file)
 	jobs.append(new_job)
+	create_grid_thumbnail(new_job)
 	save_jobs(jobs_queue_file, jobs)
 	if root and root.winfo_exists():
 		debug_print("edit queue windows is open")
@@ -263,6 +265,168 @@ def assemble_queue():
 		custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
 	else:
 		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
+		
+
+def create_grid_thumbnail(job):
+	# Creating grid thumbnails separately for source and target without using `parent`
+	job_id_hash = job["id"]
+	outputname = job["outputname"]
+	job_args = job["job_args"]
+	if not os.path.exists(thumbnail_dir):
+		os.makedirs(thumbnail_dir)
+
+	# Generate grid thumbnails for source files
+	if job["sourcecache"]:
+		thumb_source_paths = job["sourcecache"]
+		num_images = len(thumb_source_paths)
+		grid_size = math.ceil(math.sqrt(num_images))
+		thumb_size = 200 // grid_size
+
+		source_thumbnail_files = []
+		for idx, file_path in enumerate(thumb_source_paths):
+			thumbnail_path = os.path.join(thumbnail_dir, f"source_grid_{job_id_hash}_{idx}.png")
+			# debug_print(f"Processing source file for thumbnail creation: {file_path}")
+			if not os.path.exists(file_path):
+				debug_print(f"Source file not found for thumbnail creation: {file_path}")
+				continue
+			if file_path.lower().endswith(('.mp3', '.wav', '.aac', '.flac')):
+				audio_icon_path = os.path.join(working_dir, 'audioicon.png')
+				cmd = [
+					'ffmpeg', '-i', audio_icon_path,
+					'-vf', f'scale={thumb_size}:{thumb_size}',
+					'-vframes', '1',
+					'-y', thumbnail_path
+				]
+			elif file_path.lower().endswith(('.jpg', '.webp', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+				cmd = [
+					'ffmpeg', '-i', file_path,
+					'-vf', f"""thumbnail,scale='if(gt(a,1),{thumb_size},-1)':'if(gt(a,1),-1,{thumb_size})',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black""",
+					'-vframes', '1',
+					'-y', thumbnail_path
+				]
+			else:
+				# For video or other formats, use a specific frame to create the thumbnail
+				probe_cmd = [
+					'ffmpeg', '-i', file_path,
+					'-show_entries', 'format=duration',
+					'-v', 'quiet', '-of', 'csv=p=0'
+				]
+				# debug_print(f"Running ffmpeg probe command for source: {' '.join(probe_cmd)}")
+				result = subprocess.run(probe_cmd, capture_output=True, text=True)
+				if result.returncode != 0:
+					debug_print(f"Error running ffmpeg probe command for source: {result.stderr}")
+					continue
+				try:
+					duration = float(result.stdout.strip())
+				except ValueError:
+					duration = 100
+				seek_time = duration * 0.10
+				cmd = [
+					'ffmpeg', '-ss', str(seek_time), '-i', file_path,
+					'-vf', f"""thumbnail,scale='if(gt(a,1),{thumb_size},-1)':'if(gt(a,1),-1,{thumb_size})',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black""",
+					'-vframes', '1',
+					'-y', thumbnail_path
+				]
+
+			# Run ffmpeg command to generate the thumbnail
+			# debug_print(f"Running ffmpeg command for source: {' '.join(cmd)}")
+			result = subprocess.run(cmd, capture_output=True)
+			if result.returncode != 0:
+				debug_print(f"Error creating source thumbnail: {result.stderr}")
+			else:
+				source_thumbnail_files.append(thumbnail_path)
+
+		# Create a grid thumbnail for source files using the generated thumbnails
+		if len(source_thumbnail_files) > 0:
+			source_list_file_path = os.path.join(thumbnail_dir, f'{job_id_hash}_source_input_list.txt')
+			with open(source_list_file_path, 'w') as list_file:
+				for thumb in source_thumbnail_files:
+					list_file.write(f"file '{thumb}'\n")
+
+			source_grid_thumb_path = os.path.join(thumbnail_dir, f"source_grid_{job_id_hash}.png")
+			source_grid_cmd = [
+				'ffmpeg',
+				'-loglevel', 'error',
+				'-f', 'concat', '-safe', '0', '-i', source_list_file_path,
+				'-filter_complex', f'tile={grid_size}x{grid_size}:padding=2',
+				'-y', source_grid_thumb_path
+			]
+			# debug_print(f"Running ffmpeg command for source grid thumbnail: {' '.join(source_grid_cmd)}")
+			source_grid_result = subprocess.run(source_grid_cmd, capture_output=True)
+			if source_grid_result.returncode != 0:
+				debug_print(f"Error creating source grid: {source_grid_result.stderr}")
+
+			# Cleanup individual thumbnails and list file after creating the source grid
+			for file in source_thumbnail_files:
+				filesystem.remove_file(file)
+			filesystem.remove_file(source_list_file_path)
+
+	# Generate grid thumbnails for target files
+	if job["targetcache"]:
+		thumb_target_path = job["targetcache"]
+		target_thumbnail_files = []
+		thumbnail_path = os.path.join(thumbnail_dir, f"target_grid_{job_id_hash}.png")
+		# debug_print(f"Processing target file for thumbnail creation: {thumb_target_path}")
+		thumb_size = 200
+		if not os.path.exists(thumb_target_path):
+			debug_print(f"Target file not found for thumbnail creation: {thumb_target_path}")
+		else:
+			# For video or other formats, determine frame using frame_number if available
+			if not thumb_target_path.lower().endswith(('.jpg', '.webp', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+				# Extract frame number based on job arguments
+				frame_number = None
+				if '--reference-frame-number' in job_args:
+					args_list = job_args.split()
+					if '--reference-frame-number' in args_list:
+						idx = args_list.index('--reference-frame-number')
+						if idx + 1 < len(args_list):
+							try:
+								frame_number = int(args_list[idx + 1])
+							except ValueError:
+								frame_number = None
+				if frame_number is not None:
+					seek_time = frame_number
+					cmd = [
+						'ffmpeg', '-i', thumb_target_path,
+						'-vf', f'select=eq(n\,{frame_number}),scale=\'if(gt(a,1),{thumb_size},-1)\':\'if(gt(a,1),-1,{thumb_size})\',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black',
+						'-vframes', '1',
+						'-y', thumbnail_path
+					]
+					
+				else:
+					# For video or other formats, use a specific frame to create the thumbnail
+					probe_cmd = [
+						'ffmpeg', '-i', file_path,
+						'-show_entries', 'format=duration',
+						'-v', 'quiet', '-of', 'csv=p=0'
+					]
+					# debug_print(f"Running ffmpeg probe command for source: {' '.join(probe_cmd)}")
+					result = subprocess.run(probe_cmd, capture_output=True, text=True)
+
+					try:
+						duration = float(result.stdout.strip())
+					except ValueError:
+						duration = 100
+					seek_time = duration * 0.10
+					cmd = [
+						'ffmpeg', '-ss', str(seek_time), '-i', thumb_target_path,
+						'-vf', f'thumbnail,scale=\'if(gt(a,1),{thumb_size},-1)\':\'if(gt(a,1),-1,{thumb_size})\',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black',
+						'-vframes', '1',
+						'-y', thumbnail_path
+					]
+
+			else:
+				# If it's an image file
+				cmd = [
+					'ffmpeg', '-i', thumb_target_path,
+					'-vf', f"""thumbnail,scale='if(gt(a,1),{thumb_size},-1)':'if(gt(a,1),-1,{thumb_size})',pad={thumb_size}:{thumb_size}:(ow-iw)/2:(oh-ih)/2:black""",
+					'-vframes', '1',
+					'-y', thumbnail_path
+				]
+
+			result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+			target_thumbnail_files.append(thumbnail_path)
+
 
 
 def execute_jobs():
@@ -568,6 +732,7 @@ def clone_job(job):
 	clonebaseid = job['id']
 	clonedjob = job.copy()	# Copy the existing job to preserve other attributes
 	update_paths(clonedjob, "", "")
+	create_grid_thumbnail(clonedjob)
 	jobs = load_jobs(jobs_queue_file)
 	original_index = jobs.index(job)  # Find the index of the original job
 	jobs.insert(original_index + 1, clonedjob)	# Insert the cloned job right after the original job
@@ -633,6 +798,7 @@ def batch_job(job):
 					debug_print(f"{YELLOW} target - {GREEN}{add_new_job['targetcache']}{YELLOW} copied to temp media cache dir{ENDC}")
 					original_index += 1	 # Increment the index for each new job
 					jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
+					create_grid_thumbnail(add_new_job)
 				save_jobs(jobs_queue_file, jobs)
 				custom_print(f"{YELLOW} The {batchbase} {batchbasename} was used to create Batched Jobs{ENDC}")
 				print_existing_jobs()
@@ -668,6 +834,7 @@ def batch_job(job):
 				debug_print(f"{YELLOW}{source_or_target} - {GREEN}{add_new_job[source_or_target + 'cache']}{YELLOW} copied to temp media cache dir{ENDC}")
 				original_index += 1	 # Increment the index for each new job
 				jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
+				create_grid_thumbnail(add_new_job)
 			save_jobs(jobs_queue_file, jobs)
 			custom_print(f"{YELLOW} The {batchbase} {batchbasename} was used to create Batched Jobs{ENDC}")
 			print_existing_jobs()
@@ -1001,7 +1168,7 @@ def edit_job_arguments_text(job):
 		arg, value = match.groups()
 		value = ' '.join(value.split())	 # Normalize spaces
 		job_args_dict[arg] = value
-	skip_keys = ['--command', '--jobs-path', '--open-browser', '--execution-providers', '--job-id', '--job-status', '--step-index', '--source-paths', '--target-path', '--output-path', '--ui-layouts', '--ui-workflow', '--config-path', '--force-download', '--skip-download', '--execution-queue-count', '--video-memory-strategy', '--system-memory-limit', '--execution-thread-count', '--execution-providers', '--execution-device-id']
+	skip_keys = ['--command', '--jobs-path', '--open-browser', '--execution-providers', '--job-id', '--job-status', '--step-index', '--source-paths', '--target-path', '--output-path', '--source_pattern', '--target_pattern', '--output_pattern', '--ui-layouts', '--ui-workflow', '--config-path', '--force-download', '--skip-download', '--download_providers', '--execution-queue-count', '--video-memory-strategy', '--system-memory-limit', '--execution-thread-count', '--execution-providers', '--execution-device-id']
 
 	for arg, default_value in default_values.items():
 		cli_arg = '--' + arg.replace('_', '-')
@@ -1803,6 +1970,7 @@ print(f"{GREEN}GREEN = file name, cache managment or processing progress")
 print(f"{YELLOW}YELLOW = informational")
 print(f"{RED}RED = detected a Problem")
 print(f"{YELLOW}Checking Status{ENDC}\n\n")
+print(" ")
 check_for_completed_failed_or_aborted_jobs()
 print(f"{GREEN}STATUS CHECK COMPLETED. {BLUE}You are now ready to QUEUE IT UP!{ENDC}")
 print_existing_jobs()
