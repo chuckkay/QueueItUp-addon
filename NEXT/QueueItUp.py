@@ -167,7 +167,7 @@ def run(ui : gradio.Blocks) -> None:
 
 ########
 def assemble_queue():
-	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, default_values, current_values, edit_queue_running
+	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, default_values, current_values
 	missing_paths = []
 	if not state_manager.get_item('target_path'):
 		missing_paths.append("target path")
@@ -206,7 +206,7 @@ def assemble_queue():
 		debug_print(output_path)
 		output_path = os.path.dirname(output_path)
 		debug_print("just fixed output path")
-		debug_print(output_path)  # REDUNDANT: Multiple debug_print calls could be consolidated
+		debug_print(output_path)
 
 	source_paths = current_values.get("source_paths", [])
 	target_path = current_values.get("target_path", "")
@@ -275,11 +275,10 @@ def assemble_queue():
 	create_grid_thumbnail(new_job)
 	save_jobs(jobs_queue_file, jobs)
 	load_jobs(jobs_queue_file)
-	count_existing_jobs()
-	if JOB_IS_RUNNING:
-		custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
-	else:
-		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
+	# if JOB_IS_RUNNING:
+		# custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
+	# else:
+		# custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
 
 
 def create_grid_thumbnail(job):
@@ -442,14 +441,13 @@ def create_grid_thumbnail(job):
 			result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 			target_thumbnail_files.append(thumbnail_path)
 
-	save_jobs(jobs_queue_file, jobs)
-	load_jobs(jobs_queue_file)
-	count_existing_jobs()
-	if JOB_IS_RUNNING:
-		custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
-	else:
-		custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
-		
+	# save_jobs(jobs_queue_file, jobs)
+	# print_existing_jobs()
+	# if JOB_IS_RUNNING:
+		# custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
+	# else:
+		# custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
+	# load_jobs(jobs_queue_file)	
 ########
 def refresh_listbox_if_open():
 	if edit_queue_running:
@@ -519,7 +517,7 @@ def execute_jobs():
 		jobs = load_jobs(jobs_queue_file)
 		jobs = [job for job in jobs if job['status'] != 'executing']
 		jobs.append(current_run_job)
-		save_jobs(jobs_queue_file, jobs)
+		just_save_jobs(jobs_queue_file, jobs)
 
 		# Reset current_run_job to None, indicating it's no longer holding a job
 		current_run_job = None
@@ -542,8 +540,8 @@ def execute_jobs():
 			first_pending_job = None
 			break
 	JOB_IS_RUNNING = 0
-	save_jobs(jobs_queue_file, jobs)
 	check_for_unneeded_media_cache
+	save_jobs(jobs_queue_file, jobs)
 
 
 
@@ -670,10 +668,6 @@ def queueitup_settings():
 
 def edit_queue():
 	global root, edit_queue_running, frame, canvas, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
-	
-	debug_print(f"{BLUE}DEBUG: edit_queue function called. edit_queue_running={edit_queue_running}{ENDC}")
-	
-	# Prevent multiple instances of the edit queue window
 	if edit_queue_running:
 		debug_print(f"{RED}DEBUG: edit_queue_running is True, returning early{ENDC}")
 		return	# Prevent multiple instances of the window
@@ -714,25 +708,16 @@ def edit_queue():
 		# Load jobs and set up the window properties
 		jobs = load_jobs(jobs_queue_file)
 		PENDING_JOBS_COUNT = count_existing_jobs()
-		
-		# Configure the window size, title, and initial position
-		root.geometry('1200x800')  # Set window dimensions
-		root.title("Edit Queued Jobs")  # Set window title
-		root.lift()  # Bring window to front
-		root.attributes('-topmost', True)  # Make window stay on top initially
-		root.after_idle(root.attributes, '-topmost', False)  # Then allow it to be covered by other windows
-
-		# Set up the scrollbar and canvas for the job list
-		debug_print(f"{BLUE}DEBUG: Setting up scrollbar{ENDC}")
-		# Create a vertical scrollbar and position it on the right side of the window
+		root.geometry('1200x800')
+		root.title("Edit Queued Jobs")
+		root.lift()
+		root.attributes('-topmost', True)
+		root.after_idle(root.attributes, '-topmost', False)
 		scrollbar = Scrollbar(root, orient="vertical")
 		scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-		
-		# Create a canvas that will contain the scrollable frame
+
 		canvas = tk.Canvas(root)
 		canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-		
-		# Link the scrollbar and canvas together
 		# EFFICIENCY NOTE: This two-way binding is essential for proper scrolling behavior
 		canvas.configure(yscrollcommand=scrollbar.set)
 		scrollbar.configure(command=canvas.yview)
@@ -798,13 +783,9 @@ def edit_queue():
 
 		completed_jobs_button = tk.Button(root, text="Delete Completed", command=lambda: jobs_to_delete("completed"), font=custom_font)
 		completed_jobs_button.pack(pady=5)
-		
-		# Ensure all UI elements are fully initialized before proceeding
-		# EFFICIENCY NOTE: This forces Tkinter to process all pending UI updates
-		root.update_idletasks()
-		
-		# Delay calling refresh_frame_listbox until after the window is fully initialized
-		# This helps prevent UI glitches and timing issues
+
+		root.update_idletasks() #is this necessary 
+
 		def delayed_refresh():
 			debug_print(f"{BLUE}DEBUG: Calling refresh_frame_listbox{ENDC}")
 			try:
@@ -846,7 +827,6 @@ def edit_queue():
 			root = None
 
 def run_jobs_click():
-	global edit_queue_running, root  # UNUSED: edit_queue_running and root are declared but not used in this function
 	debug_print(f"{BLUE}DEBUG: run_jobs_click called{ENDC}")
 	
 	save_jobs(jobs_queue_file, jobs)
@@ -863,9 +843,8 @@ def clone_job(job):
 	original_index = jobs.index(job)  # Find the index of the original job
 	jobs.insert(original_index + 1, clonedjob)	# Insert the cloned job right after the original job
 	save_jobs(jobs_queue_file, jobs)
-	custom_print(f"{YELLOW} The Job {clonebaseid} Was Cloned{ENDC}")
-	print_existing_jobs()
-	
+	custom_print(f"{YELLOW} The Job {clonebaseid} Was Cloned{ENDC}")	
+
 def batch_job(job):
 	target_filetype = None
 	source_or_target = None
@@ -924,9 +903,9 @@ def batch_job(job):
 					original_index += 1	 # Increment the index for each new job
 					jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 					create_grid_thumbnail(add_new_job)
-				save_jobs(jobs_queue_file, jobs)
+					save_jobs(jobs_queue_file, jobs)
+				
 				custom_print(f"{YELLOW} The {batchbase} {batchbasename} was used to create Batched Jobs{ENDC}")
-				print_existing_jobs()
 
 		dialog.destroy()
 		open_file_dialog()
@@ -960,9 +939,10 @@ def batch_job(job):
 				original_index += 1	 # Increment the index for each new job
 				jobs.insert(original_index, add_new_job)  # Insert the new job right after the original job
 				create_grid_thumbnail(add_new_job)
-			save_jobs(jobs_queue_file, jobs)
+				save_jobs(jobs_queue_file, jobs)
+			# save_jobs(jobs_queue_file, jobs)
 			custom_print(f"{YELLOW} The {batchbase} {batchbasename} was used to create Batched Jobs{ENDC}")
-			print_existing_jobs()
+			# print_existing_jobs()
 	dialog = tk.Toplevel()
 	dialog.withdraw()
 	if job['sourcecache']:
@@ -1158,14 +1138,13 @@ def refresh_frame_listbox():
 		traceback.print_exc()
 
 def refresh_buttonclick():
-	count_existing_jobs()
 	save_jobs(jobs_queue_file, jobs)
-
+	
 def make_job_pending(job):
 	job['status'] = 'pending'
-	save_jobs(jobs_queue_file, jobs)
 	custom_print(f"{YELLOW}A Job Status was changed to pending{ENDC}")
-	print_existing_jobs()
+	save_jobs(jobs_queue_file, jobs)
+	# print_existing_jobs()
 	
 	
 def jobs_to_delete(jobstatus):
@@ -1180,7 +1159,7 @@ def jobs_to_delete(jobstatus):
 	save_jobs(jobs_queue_file, jobs)
 	custom_print(f"{YELLOW}All {jobstatus} Jobs have been Deleted{ENDC}")
 	check_for_unneeded_media_cache
-	print_existing_jobs()
+	# print_existing_jobs()
 
 def remove_old_grid(job_id_hash, source_or_target):
 	image_ref_key = f"{source_or_target}_grid_{job_id_hash}.png"
@@ -1196,7 +1175,7 @@ def archive_job(job):
 		job['status'] = 'archived'
 		custom_print(f"{YELLOW} Job Archived - {GREEN}{job['id']}{ENDC}")
 	save_jobs(jobs_queue_file, jobs)
-	print_existing_jobs()
+	# print_existing_jobs()
 
 def output_path_job(job):
 	selected_path = filedialog.askdirectory(title="Select A New Output Path for this Job")
@@ -1215,9 +1194,8 @@ def delete_job(job):
 	remove_old_grid(job_id_hash, source_or_target = 'target')
 	check_for_unneeded_media_cache
 	custom_print(f"{YELLOW} Job Deleted{ENDC}")
-	print_existing_jobs()
 	save_jobs(jobs_queue_file, jobs)
-
+	# print_existing_jobs()
 
 
 def move_job_up(index):
@@ -1530,7 +1508,7 @@ def update_paths(job, path, source_or_target):
 	job['hash'] = output_hash
 	job['outputname'] = outputname
 	job['full_output_path'] = os.path.join(job['output_path'], job['id'] + job['output_extension'])
-	save_jobs(jobs_queue_file, jobs)
+	just_save_jobs(jobs_queue_file, jobs)
 
 
 
@@ -1858,11 +1836,16 @@ def load_jobs(file_path):
 	return jobs
 
 
+def just_save_jobs(file_path, jobs):
+	with open(file_path, 'w') as file:
+		json.dump(jobs, file, indent=4)
+
 
 
 def save_jobs(file_path, jobs):
 	with open(file_path, 'w') as file:
 		json.dump(jobs, file, indent=4)
+	print_existing_jobs()
 	refresh_listbox_if_open()
 
 
@@ -1887,12 +1870,13 @@ def check_for_completed_failed_or_aborted_jobs():
 				source_basenames = [os.path.basename(path) for path in job['sourcecache']]
 			elif job['sourcecache']:
 				source_basenames = os.path.basename(job['sourcecache'])
-			custom_print(f"{GREEN}A job {GREEN}{source_basenames}{ENDC} to -> {GREEN}{os.path.basename(job['targetcache'])} was found that terminated early it will be moved back to the pending jobs queue - you have a Total of {PENDING_JOBS_COUNT + JOB_IS_RUNNING} in the Queue")
 			jobidname = job['id'] + ".json"  
 			queued_directory = os.path.join(base_dir, '.jobs', 'queued')  
 			halted_job = os.path.join(queued_directory, jobidname)  
 			filesystem.remove_file(halted_job)
 			save_jobs(jobs_queue_file, jobs)
+			custom_print(f"{GREEN}A job {GREEN}{source_basenames}{ENDC} to -> {GREEN}{os.path.basename(job['targetcache'])} was found that terminated early it will be moved back to the pending jobs queue - you have a Total of {PENDING_JOBS_COUNT + JOB_IS_RUNNING} in the Queue")
+
 	if not keep_completed_jobs:
 		jobs_to_delete("completed")
 		print(f"{BLUE}All completed jobs have been removed, if you would like to keep completed jobs change the setting to True{ENDC}")
