@@ -167,7 +167,8 @@ def run(ui : gradio.Blocks) -> None:
 
 ########
 def assemble_queue():
-	global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, default_values, current_values
+	#global RUN_JOBS_BUTTON, ADD_JOB_BUTTON, jobs_queue_file, jobs, default_values, current_values, edit_queue_running 
+	global jobs_queue_file, jobs, default_values, current_value  
 	missing_paths = []
 	if not state_manager.get_item('target_path'):
 		missing_paths.append("target path")
@@ -199,7 +200,7 @@ def assemble_queue():
 
 	output_path = current_values.get("output_path", "")
 	# Split the path into the directory and the file extension
-	path_without_ext, ext = os.path.splitext(output_path)
+	path_without_ext, ext = os.path.splitext(output_path)  # UNUSED: path_without_ext is never used
 
 	# Check if there's an extension to determine if it's a file path
 	if ext:
@@ -239,7 +240,7 @@ def assemble_queue():
 	if debugging:
 		with open(os.path.join(working_dir, "arguments_values.txt"), "w") as file:
 			file.write(json.dumps(arguments) + "\n")
-	job_args = f"{arguments}"
+	job_args = f"{arguments}"  # REDUNDANT: Unnecessary formatting as f-string 
 
 	if source_paths == None:
 		cache_source_paths = None
@@ -253,16 +254,16 @@ def assemble_queue():
 		"status": "pending",
 		"headless": "--headless",
 		"processors": string_processors,
-		"sourcecache": (cache_source_paths),
-		"source_name": (source_name),
-		"targetcache": (cache_target_path),
-		"target_name": (target_name),
-		"outputname": (outputname),
-		"output_extension": (output_extension),
-		"full_output_path": (full_output_path),
-		"output_path": (output_path),
-		"hash": (output_hash),
-		"id": (queueitup_job_id)
+		"sourcecache": (cache_source_paths),  # UNNECESSARY: Extra parentheses not needed
+		"source_name": (source_name),  # UNNECESSARY: Extra parentheses not needed
+		"targetcache": (cache_target_path),  # UNNECESSARY: Extra parentheses not needed
+		"target_name": (target_name),  # UNNECESSARY: Extra parentheses not needed
+		"outputname": (outputname),  # UNNECESSARY: Extra parentheses not needed
+		"output_extension": (output_extension),  # UNNECESSARY: Extra parentheses not needed
+		"full_output_path": (full_output_path),  # UNNECESSARY: Extra parentheses not needed
+		"output_path": (output_path),  # UNNECESSARY: Extra parentheses not needed
+		"hash": (output_hash),  # UNNECESSARY: Extra parentheses not needed
+		"id": (queueitup_job_id)  # UNNECESSARY: Extra parentheses not needed
 	}
 
 	if debugging:
@@ -275,10 +276,6 @@ def assemble_queue():
 	create_grid_thumbnail(new_job)
 	save_jobs(jobs_queue_file, jobs)
 	load_jobs(jobs_queue_file)
-	# if JOB_IS_RUNNING:
-		# custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
-	# else:
-		# custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
 
 
 def create_grid_thumbnail(job):
@@ -441,14 +438,7 @@ def create_grid_thumbnail(job):
 			result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 			target_thumbnail_files.append(thumbnail_path)
 
-	# save_jobs(jobs_queue_file, jobs)
-	# print_existing_jobs()
-	# if JOB_IS_RUNNING:
-		# custom_print(f"{BLUE}job # {CURRENT_JOB_NUMBER + PENDING_JOBS_COUNT + 1} was added {ENDC}")
-	# else:
-		# custom_print(f"{BLUE}Your Job was Added to the queue, there are a total of #{PENDING_JOBS_COUNT} Job(s) in the queue,\n {YELLOW} Add More Jobs, Edit the Queue, or Click Run Jobs to Execute all the queued jobs{ENDC}")
-	# load_jobs(jobs_queue_file)	
-########
+
 def refresh_listbox_if_open():
 	if edit_queue_running:
 		try:
@@ -504,9 +494,7 @@ def execute_jobs():
 		else:
 			custom_print(f"{BLUE}Job #{CURRENT_JOB_NUMBER} will be doing {YELLOW}{printjobtype}{ENDC} - {GREEN}{source_basenames}\n{YELLOW} to -> the Target {orig_dimensions} {target_filetype} {GREEN}{os.path.basename(current_run_job['targetcache'])}{ENDC}, \n which will be saved in the folder {GREEN}{current_run_job['output_path']}{ENDC}")
 
-##
-		RUN_job_args(current_run_job)
-##
+		RUN_job_args(current_run_job)  # OPTIMIZATION: This function could be inlined since it's only called once
 		if current_run_job['status'] == 'failed':
 			custom_print(f"{BLUE}Job # {CURRENT_JOB_NUMBER} {RED} failed. Please check the validity of {source_basenames} and {RED}{os.path.basename(current_run_job['targetcache'])}.\n {BLUE}{PENDING_JOBS_COUNT} jobs remaining, pausing 1 second before starting next job{ENDC}")
 		else:
@@ -667,7 +655,8 @@ def queueitup_settings():
 
 
 def edit_queue():
-	global root, edit_queue_running, frame, canvas, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT
+	global root, edit_queue_running, frame, canvas, jobs_queue_file, jobs, job, thumbnail_dir, working_dir, pending_jobs_var, PENDING_JOBS_COUNT  # UNNECESSARY: 'job' is declared as global but never used in this function
+	# Prevent multiple instances of the edit queue window
 	if edit_queue_running:
 		debug_print(f"{RED}DEBUG: edit_queue_running is True, returning early{ENDC}")
 		return	# Prevent multiple instances of the window
@@ -691,7 +680,6 @@ def edit_queue():
 			
 			if root:
 				try:
-					# First quit the mainloop, then destroy the window
 					root.quit()
 					root.destroy()
 				except:
@@ -702,7 +690,6 @@ def edit_queue():
 			edit_queue_running = False
 			debug_print(f"{BLUE}DEBUG: edit_queue_running = False{ENDC}")
 
-		# Register the window close handler with the Tkinter protocol
 		root.protocol("WM_DELETE_WINDOW", on_window_close_internal)
 		
 		# Load jobs and set up the window properties
@@ -811,8 +798,6 @@ def edit_queue():
 		traceback.print_exc()
 	finally:
 		# Ensure resources are cleaned up even if an exception occurs
-		# EFFICIENCY NOTE: This duplicates some cleanup code from on_window_close_internal
-		# Could be refactored into a separate cleanup function
 		edit_queue_running = False
 		pending_jobs_var = None
 		frame = None
@@ -827,11 +812,10 @@ def edit_queue():
 			root = None
 
 def run_jobs_click():
+	global edit_queue_running, root  # UNUSED: edit_queue_running and root are declared but not used in this function
 	debug_print(f"{BLUE}DEBUG: run_jobs_click called{ENDC}")
 	
 	save_jobs(jobs_queue_file, jobs)
-	
-	# Start a new thread to execute the jobs
 	threading.Thread(target=execute_jobs).start()  # Run execute_jobs in a separate thread
 
 def clone_job(job):
@@ -1840,8 +1824,6 @@ def just_save_jobs(file_path, jobs):
 	with open(file_path, 'w') as file:
 		json.dump(jobs, file, indent=4)
 
-
-
 def save_jobs(file_path, jobs):
 	with open(file_path, 'w') as file:
 		json.dump(jobs, file, indent=4)
@@ -2019,7 +2001,6 @@ print(f"{BLUE}FaceFusion version: {GREEN}{facefusion_version}{ENDC}")
 print(f"{BLUE}QueueItUp! version: {GREEN}{queueitup_version}{ENDC}")
 
 default_values = get_values_from_FF("default_values")
-
 settings_path = default_values.get("config_path", "")
 
 initialize_settings()
