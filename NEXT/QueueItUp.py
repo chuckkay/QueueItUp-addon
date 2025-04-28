@@ -301,7 +301,7 @@ def create_grid_thumbnail(job):
 				debug_print(f"Source file not found for thumbnail creation: {file_path}")
 				continue
 			if file_path.lower().endswith(('.mp3', '.wav', '.aac', '.flac')):
-				audio_icon_path = os.path.join(working_dir, 'audioicon.png')
+				audio_icon_path = os.path.join(thumbnail_dir, 'audioicon.png')
 				cmd = [
 					'ffmpeg', '-i', audio_icon_path,
 					'-vf', f'scale={thumb_size}:{thumb_size}',
@@ -1373,7 +1373,7 @@ def create_job_thumbnail(parent, job, source_or_target):
 	for idx, file_path in enumerate(file_paths):
 		thumbnail_path = os.path.join(thumbnail_dir, f"{source_or_target}_thumb_{job_id_hash}_{idx}.png")
 		if file_path.lower().endswith(('.mp3', '.wav', '.aac', '.flac')):
-			audio_icon_path = os.path.join(working_dir, 'audioicon.png')
+			audio_icon_path = os.path.join(thumbnail_dir, 'audioicon.png')
 			cmd = [
 				'ffmpeg', '-i', audio_icon_path,
 				'-vf', f'scale={thumb_size}:{thumb_size}',
